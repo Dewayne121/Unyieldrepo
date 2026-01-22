@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unyield - Profile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* --- Shared Variables --- */
+        :root {
+            --bg-deep: #050505;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            
+            /* Accolade Colors */
+            --beta-cyan: #00f0ff;
+            --staff-gold: #D4AF37;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(circle at 50% 0%, #1a1a1a 0%, transparent 60%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            color: var(--text-main);
+            padding: 20px 0;
+        }
+
+        .app-container {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            width: 100%;
+            max-width: 420px;
+            min-height: 90vh;
+            position: relative;
+            border: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            border-radius: 24px; 
+            overflow: hidden;
+        }
+
+        /* --- Header --- */
+        .header {
+            padding: 24px 24px 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .icon-btn {
+            font-size: 18px;
+            color: var(--text-main);
+            text-decoration: none;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            transition: background 0.2s;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); }
+
+        .page-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+
+        /* --- Profile Hero Section --- */
+        .profile-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 24px 24px 24px;
+            text-align: center;
+        }
+
+        .avatar-container {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #333;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.05); 
+        }
+
+        /* Container for Name + Level */
+        .name-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .user-name {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #fff;
+        }
+
+        /* Simplified Static Level Tag */
+        .level-tag {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 3px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .user-handle {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: 'Space Mono', monospace;
+            margin-bottom: 20px;
+        }
+
+        /* --- Accolades --- */
+        .accolades-tray {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .accolade-plate {
+            display: flex;
+            align-items: center;
+            padding: 5px 12px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            user-select: none;
+            overflow: hidden;
+        }
+        .accolade-plate i { margin-right: 6px; font-size: 10px; }
+
+        .plate-beta {
+            border-color: rgba(0, 240, 255, 0.3);
+            color: var(--beta-cyan);
+            background: rgba(0, 240, 255, 0.05);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+        }
+
+        .plate-staff {
+            border-color: rgba(212, 175, 55, 0.3);
+            color: var(--staff-gold);
+            background: rgba(212, 175, 55, 0.05);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.1);
+        }
+
+        /* --- Stats Row --- */
+        .stats-matrix {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            padding: 20px 0;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 10px;
+        }
+
+        .stat-item {
+            flex: 1;
+            text-align: center;
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+        .stat-item:last-child { border-right: none; }
+
+        .stat-val {
+            font-family: 'Space Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        /* --- Menu List --- */
+        .menu-list {
+            padding: 10px 16px;
+            flex-grow: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: transparent;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            text-decoration: none;
+            color: var(--text-main);
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+
+        .menu-item:hover {
+            background: rgba(255,255,255,0.03);
+            padding-left: 20px;
+        }
+
+        .menu-left { display: flex; align-items: center; gap: 12px; }
+        .menu-icon { color: var(--text-muted); width: 20px; text-align: center;}
+        .menu-text { font-size: 14px; font-weight: 500; }
+        .menu-arrow { color: #333; font-size: 12px; }
+
+        .menu-item:hover .menu-icon { color: #fff; }
+        .menu-item.danger { margin-top: 20px; border: none; }
+        .menu-item.danger .menu-text { color: #ff003c; }
+        .menu-item.danger .menu-icon { color: #ff003c; }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <div class="header">
+            <a href="#" class="icon-btn"><i class="fa-solid fa-arrow-left"></i></a>
+            <div class="page-title">Identity</div>
+            <a href="#" class="icon-btn"><i class="fa-solid fa-gear"></i></a>
+        </div>
+
+        <div class="profile-hero">
+            <div class="avatar-container">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop" alt="Profile" class="avatar">
+            </div>
+            
+            <div class="name-row">
+                <span class="user-name">Sarah Jenkins</span>
+                <span class="level-tag">LVL 42</span>
+            </div>
+
+            <p class="user-handle">@sarah_lifts</p>
+
+            <div class="accolades-tray">
+                <div class="accolade-plate plate-staff">
+                    <i class="fa-solid fa-shield-halved"></i> UY Staff
+                </div>
+                <div class="accolade-plate plate-beta">
+                    <i class="fa-solid fa-flask"></i> Beta Tester
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-matrix">
+            <div class="stat-item">
+                <span class="stat-val">28</span>
+                <span class="stat-label">Workouts</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-val">14.2k</span>
+                <span class="stat-label">Points</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-val">12</span>
+                <span class="stat-label">Streak</span>
+            </div>
+        </div>
+
+        <div class="menu-list">
+            <a href="#" class="menu-item">
+                <div class="menu-left">
+                    <i class="fa-regular fa-user menu-icon"></i>
+                    <span class="menu-text">Edit Profile</span>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </a>
+
+            <a href="#" class="menu-item">
+                <div class="menu-left">
+                    <i class="fa-solid fa-clock-rotate-left menu-icon"></i>
+                    <span class="menu-text">History</span>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </a>
+
+            <a href="#" class="menu-item">
+                <div class="menu-left">
+                    <i class="fa-solid fa-chart-line menu-icon"></i>
+                    <span class="menu-text">Statistics</span>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </a>
+
+            <a href="#" class="menu-item danger">
+                <div class="menu-left">
+                    <i class="fa-solid fa-arrow-right-from-bracket menu-icon"></i>
+                    <span class="menu-text">Sign Out</span>
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+</body>
+</html>

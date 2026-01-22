@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>UNYIELD // OPERATOR APP</title>
+  <style>
+    /* =========================
+       SKINS (THEMES)
+       ========================= */
+    :root {
+      --nav-height: 70px;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: "SF Mono", "Segoe UI Mono", "Roboto Mono", monospace;
+
+      /* Default Skin: MINIMAL LIGHT */
+      --bg-deep: #f4f5f7;
+      --bg-panel: #ffffff;
+      --bg-card: #ffffff;
+      --primary: #111827; 
+      --primary-dim: rgba(17, 24, 39, 0.05);
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #ef4444;
+      --gold: #d4af37;
+      --success: #10b981;
+      --shadow: 0 10px 30px rgba(0,0,0,0.05);
+      --shadow-soft: 0 4px 20px rgba(0,0,0,0.03);
+      --grid-pattern: none;
+    }
+
+    /* Skin: OPERATOR (Dark) */
+    [data-skin="operator"] {
+      --bg-deep: #0a0a0a;
+      --bg-panel: #121212;
+      --bg-card: #1a1a1a;
+      --primary: #33ffaa;
+      --primary-dim: rgba(51, 255, 170, 0.1);
+      --text-main: #ededed;
+      --text-muted: #666666;
+      --border: #2a2a2a;
+      --danger: #ff5555;
+      --gold: #ffd700;
+      --success: #33ffaa;
+      --shadow: 0 20px 60px rgba(0,0,0,0.4);
+      --shadow-soft: 0 10px 30px rgba(0,0,0,0.3);
+      --grid-pattern: none;
+    }
+
+    /* Skin: MIDNIGHT (Blue) */
+    [data-skin="midnight"] {
+      --bg-deep: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-card: #334155;
+      --primary: #38bdf8;
+      --primary-dim: rgba(56, 189, 248, 0.1);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --danger: #f43f5e;
+      --gold: #fbbf24;
+      --success: #34d399;
+      --shadow: 0 20px 60px rgba(0,0,0,0.4);
+      --shadow-soft: 0 14px 30px rgba(0,0,0,0.3);
+      --grid-pattern: none;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      font-family: var(--font-sans);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* --- App Shell --- */
+    #app-shell {
+      width: 100%;
+      max-width: 430px;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-deep);
+      color: var(--text-main);
+      transition: background 0.3s ease;
+    }
+
+    @media (min-width: 520px) {
+      #app-shell {
+        height: 900px;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+    }
+
+    /* --- Typography & Utils --- */
+    .hidden { display: none !important; }
+    .text-primary { color: var(--primary); }
+    .text-muted { color: var(--text-muted); }
+    .text-mono { font-family: var(--font-mono); }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .justify-center { justify-content: center; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-4 { gap: 1rem; }
+    .w-full { width: 100%; }
+
+    /* --- Animations --- */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1); } }
+    @keyframes pulse-border { 0% { border-color: var(--border); } 50% { border-color: var(--danger); } 100% { border-color: var(--border); } }
+
+    .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+    .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+    /* --- Components --- */
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: var(--bg-panel);
+      border-color: var(--primary);
+    }
+    
+    [data-skin="operator"] button.primary,
+    [data-skin="midnight"] button.primary {
+      color: var(--bg-deep);
+    }
+
+    button:active { transform: scale(0.97); }
+
+    input, select {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      width: 100%;
+      font-family: var(--font-mono);
+      outline: none;
+      transition: border-color 0.2s ease;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+
+    input:focus, select:focus { border-color: var(--primary); }
+
+    /* Cards */
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      margin-bottom: 16px;
+      color: var(--text-main);
+      box-shadow: var(--shadow-soft);
+    }
+    
+    [data-skin="operator"] .card, 
+    [data-skin="midnight"] .card {
+        background: var(--bg-card);
+        border-color: rgba(255,255,255,0.05);
+    }
+
+    /* --- Base Screen Specifics --- */
+    .hero-panel {
+      padding: 24px 24px 32px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    [data-skin="operator"] .hero-panel,
+    [data-skin="midnight"] .hero-panel {
+        background: var(--bg-card);
+    }
+
+    .identity-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .identity-info h2 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      line-height: 1.1;
+      font-family: var(--font-mono);
+    }
+
+    .identity-info .rank-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .xp-ring-container { text-align: right; }
+    .xp-big {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+    .xp-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* XP BAR */
+    .xp-hud-frame { margin-top: 5px; }
+    .xp-hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .xp-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      font-family: var(--font-mono);
+    }
+    .xp-pct {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary);
+      font-family: var(--font-mono);
+    }
+    .progress-track {
+      height: 8px;
+      background: var(--bg-deep);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Stats Grid */
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 0 24px;
+      margin-bottom: 24px;
+    }
+    .hud-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .hud-val {
+      font-size: 20px;
+      font-weight: 900;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+    .hud-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    /* Activity Graph */
+    .activity-panel {
+      margin: 0 24px 24px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+    [data-skin="operator"] .activity-panel,
+    [data-skin="midnight"] .activity-panel {
+        background: var(--bg-card);
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .panel-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .graph-stage {
+      height: 100px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .graph-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      height: 100%;
+      cursor: pointer;
+    }
+    .graph-bar {
+      width: 100%;
+      background: var(--border);
+      border-radius: 4px;
+      min-height: 4px;
+      transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s;
+    }
+    .graph-bar.has-data { background: var(--primary); opacity: 0.8; }
+    .graph-bar:hover { opacity: 1; transform: scaleY(1.05); }
+    .graph-day {
+      margin-top: 10px;
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    /* --- Navigation --- */
+    nav.bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(var(--nav-height) + env(safe-area-inset-bottom));
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 500;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    [data-skin="operator"] nav.bottom-nav,
+    [data-skin="midnight"] nav.bottom-nav {
+        background: var(--bg-deep);
+    }
+    .nav-item {
+      color: var(--text-muted);
+      text-align: center;
+      font-size: 9px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 20%;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      opacity: 0.6;
+      transition: all 0.2s;
+    }
+    .nav-item.active { color: var(--primary); opacity: 1; }
+    .nav-item svg { width: 20px; height: 20px; fill: currentColor; }
+
+    /* POP-OUT CIRCLE BUTTON */
+    .fab-container {
+        position: relative;
+        width: 20%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .fab-log {
+      position: absolute;
+      top: -30px;
+      width: 60px;
+      height: 60px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-soft);
+      border: 6px solid var(--bg-deep);
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      cursor: pointer;
+      color: var(--bg-panel);
+      z-index: 501;
+    }
+    [data-skin="operator"] .fab-log,
+    [data-skin="midnight"] .fab-log {
+        color: var(--bg-deep);
+        border-color: var(--bg-deep);
+    }
+    .fab-log:active { transform: scale(0.9); }
+    .fab-log svg { fill: currentColor; width: 26px; height: 26px; }
+
+    /* --- Headers & Actions --- */
+    header.screen-header {
+      padding: calc(16px + env(safe-area-inset-top)) 24px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-deep);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    #screen-base header.screen-header { border-bottom: none; }
+    #screen-log header.screen-header,
+    #screen-shop header.screen-header,
+    #screen-leagues header.screen-header,
+    #screen-stats header.screen-header {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .icon-btn {
+      position: relative;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-main);
+      padding: 0;
+      transition: all 0.2s;
+    }
+    .icon-btn:active { background: var(--bg-card); }
+
+    .cart-count {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      min-width: 16px;
+      height: 16px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+
+    /* --- Onboarding --- */
+    #onboarding {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-deep);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .onboarding-step { width: 100%; max-width: 400px; text-align: center; }
+    .logo-text {
+      font-size: 2.2rem;
+      font-weight: 900;
+      font-family: var(--font-mono);
+      letter-spacing: -1px;
+      margin-bottom: 30px;
+      color: var(--text-main);
+      text-transform: uppercase;
+    }
+
+    /* --- Log Screen Components --- */
+    .exercise-pill {
+      padding: 12px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      white-space: nowrap;
+      cursor: pointer;
+      font-size: 11px;
+      background: var(--bg-card);
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      user-select: none;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .exercise-pill.active { border-color: var(--primary); background: var(--primary); color: var(--bg-panel); }
+    [data-skin="operator"] .exercise-pill.active,
+    [data-skin="midnight"] .exercise-pill.active { color: var(--bg-deep); }
+
+    .pill-scroller {
+      display: flex;
+      overflow-x: auto;
+      gap: 10px;
+      padding: 4px 24px 12px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      margin: 0 -24px; /* bleed */
+    }
+    .pill-scroller::-webkit-scrollbar { display: none; }
+
+    /* FIX: Shop pill scroller alignment (remove bleed + keep aligned with page padding) */
+    #screen-shop .pill-scroller {
+      margin: 0;
+      padding: 4px 0 12px;
+    }
+
+    .number-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px;
+    }
+    [data-skin="operator"] .number-control,
+    [data-skin="midnight"] .number-control { background: var(--bg-card); }
+
+    .control-btn {
+      width: 44px; height: 44px;
+      background: var(--bg-deep);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 18px;
+      color: var(--text-main);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Recorder */
+    .recorder-box { 
+      height: 180px; 
+      background: #000; 
+      border-radius: var(--radius-md); 
+      display: flex; flex-direction: column; 
+      align-items: center; justify-content: center; 
+      position: relative; 
+      overflow: hidden; 
+      margin: 20px 0; 
+      border: 1px solid var(--border);
+    }
+    .rec-btn { 
+      width: 64px; height: 64px; 
+      border-radius: 50%; 
+      background: var(--danger); 
+      border: 4px solid rgba(255,255,255,0.2); 
+      transition: all 0.2s; 
+    }
+    .rec-btn.recording { background: #fff; animation: pulse-border 1s infinite; border-radius: 12px; }
+
+    /* --- Modals for Shop/Summary --- */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 2000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-content {
+      background: var(--bg-panel);
+      width: 100%;
+      border-radius: 24px 24px 0 0;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 30px 24px calc(30px + env(safe-area-inset-bottom));
+      animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+    }
+    [data-skin="operator"] .modal-content,
+    [data-skin="midnight"] .modal-content { background: var(--bg-card); }
+
+    /* Leaderboard */
+    .podium-stage {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 12px;
+      height: 160px;
+      margin-top: 14px;          /* FIX: add breathing room under header */
+      margin-bottom: 24px;
+      padding: 0 10px;
+    }
+    .podium-spot { width: 30%; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .podium-avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 800; margin-bottom: 8px; font-family:var(--font-mono); color: var(--text-muted); }
+    .rank-1 .podium-avatar { width: 64px; height: 64px; border-color: var(--gold); background: var(--gold); color: var(--bg-deep); }
+    .podium-base { width: 100%; background: var(--bg-card); border-radius: 6px 6px 0 0; border: 1px solid var(--border); border-bottom: none; height: 40px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; font-family:var(--font-mono); opacity: 0.5; }
+    .rank-1 .podium-base { height: 80px; opacity: 1; border-color: var(--gold); border-bottom: none; }
+    [data-skin="operator"] .rank-1 .podium-base { background: var(--bg-card); }
+    .rank-2 .podium-base { height: 60px; }
+    .rank-3 .podium-base { height: 40px; }
+
+    .lb-card { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--bg-panel); border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; font-family: var(--font-mono); }
+    .lb-card.is-me { background: var(--primary-dim); border-radius: 8px; border: none; }
+    [data-skin="operator"] .lb-card,
+    [data-skin="midnight"] .lb-card { background: var(--bg-card); border-color: rgba(255,255,255,0.05); }
+
+    /* =========================
+       SHOP UPGRADES - COMPLETE OVERHAUL
+       ========================= */
+    .shop-hero {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 24px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    [data-skin="operator"] .shop-hero,
+    [data-skin="midnight"] .shop-hero { 
+      background: var(--bg-card); 
+      border-color: rgba(255,255,255,0.1);
+    }
+    .shop-hero::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 100px;
+      background: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 10px,
+        var(--primary-dim) 10px,
+        var(--primary-dim) 20px
+      );
+      z-index: 0;
+    }
+    .shop-hero-content { position: relative; z-index: 1; }
+    .shop-tagline {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--primary);
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .shop-title {
+      font-size: 20px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin: 0;
+      letter-spacing: 0.5px;
+      line-height: 1;
+    }
+    .product-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr;
+      gap: 12px; 
+      padding-bottom: 40px;
+    }
+    .product-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    [data-skin="operator"] .product-card,
+    [data-skin="midnight"] .product-card { 
+      background: var(--bg-card); 
+      border-color: rgba(255,255,255,0.1);
+    }
+    .product-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-soft);
+    }
+    .product-schematic {
+      aspect-ratio: 1/1;
+      width: 100%;
+      background: var(--bg-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-size: 42px;
+      border-bottom: 1px solid var(--border);
+      background-image: linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 20px 20px;
+      background-position: center;
+    }
+    [data-skin="operator"] .product-schematic,
+    [data-skin="midnight"] .product-schematic {
+      background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    }
+    .product-schematic::after {
+      content: '+';
+      position: absolute;
+      top: 6px; right: 8px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 300;
+    }
+    .rarity-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 8px;
+      font-family: var(--font-mono);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text-main);
+    }
+    .product-details {
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .product-name {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      line-height: 1.3;
+      min-height: 28px;
+    }
+    .product-desc {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+    .product-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+    }
+    .product-price {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--primary);
+    }
+    .btn-add-grid {
+      background: var(--primary);
+      color: var(--bg-panel);
+      border: none;
+      padding: 8px 12px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      border-radius: 2px;
+      text-transform: uppercase;
+    }
+    [data-skin="operator"] .btn-add-grid,
+    [data-skin="midnight"] .btn-add-grid { color: var(--bg-deep); }
+
+    /* Toast */
+    #toast-container {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3000;
+      width: auto;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--text-main);
+      color: var(--bg-panel);
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 11px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* Screen Transition Logic */
+    .screen {
+      padding-bottom: 100px;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--bg-deep);
+    }
+
+    /* Input Wrapper on Log Screen */
+    .log-section-title { 
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      display:block;
+      margin-bottom:10px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-shell" data-skin="minimal">
+    <div id="toast-container"></div>
+
+    <div id="onboarding">
+      <div class="onboarding-step animate-slide-up" id="step-1">
+        <h1 class="logo-text">UNYIELD<br><span style="font-size: 1rem; letter-spacing: 4px; opacity:0.5; font-weight: 400;">SYSTEMS</span></h1>
+        <p class="text-muted text-mono" style="margin-bottom: 24px; font-weight: 700; font-size: 11px;">OPERATOR IDENTIFICATION</p>
+        <div style="margin-bottom: 24px;">
+          <input type="text" id="input-callsign" placeholder="CALLSIGN" maxlength="12" style="text-align: center; letter-spacing: 2px; font-weight: 700; text-transform: uppercase;">
+        </div>
+        <button class="primary w-full" onclick="nextOnboardStep(2)">INITIALIZE</button>
+      </div>
+
+      <div class="onboarding-step hidden animate-slide-up" id="step-2">
+        <h2 style="font-size: 18px; letter-spacing: 1px; margin-bottom: 10px; font-family:var(--font-mono);">SECTOR</h2>
+        <p class="text-muted" style="font-size: 12px; margin-bottom: 24px;">SELECT OPERATIONAL REGION</p>
+        <div style="margin-bottom: 24px;">
+          <select id="input-region">
+            <option value="Global">GLOBAL OPERATIONS</option>
+            <option value="London">LONDON SECTOR</option>
+            <option value="Manchester">MANCHESTER SECTOR</option>
+            <option value="Birmingham">BIRMINGHAM SECTOR</option>
+            <option value="Leeds">LEEDS SECTOR</option>
+            <option value="Glasgow">GLASGOW SECTOR</option>
+          </select>
+        </div>
+        <div class="flex gap-2">
+          <button class="w-full" onclick="prevOnboardStep(1)">BACK</button>
+          <button class="primary w-full" onclick="nextOnboardStep(3)">CONFIRM</button>
+        </div>
+      </div>
+
+      <div class="onboarding-step hidden animate-slide-up" id="step-3">
+        <h2 style="font-size: 18px; letter-spacing: 1px; margin-bottom: 10px; font-family:var(--font-mono);">DIRECTIVE</h2>
+        <p class="text-muted" style="font-size: 12px; margin-bottom: 24px;">PRIMARY OBJECTIVE</p>
+        <div class="flex flex-col gap-2" style="margin-bottom: 24px;">
+          <button onclick="selectGoal('Hypertrophy', this)" class="goal-btn">HYPERTROPHY</button>
+          <button onclick="selectGoal('Leanness', this)" class="goal-btn">LEANNESS</button>
+          <button onclick="selectGoal('Performance', this)" class="goal-btn">PERFORMANCE</button>
+        </div>
+        <input type="hidden" id="input-goal">
+        <button class="primary w-full" onclick="completeOnboarding()">ENGAGE SYSTEM</button>
+      </div>
+    </div>
+
+    <div id="app-container" class="hidden">
+      <section id="screen-base" class="screen animate-fade-in">
+        <header class="screen-header">
+          <div>
+            <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 4px; font-family:var(--font-mono);">
+              OPERATOR // <span id="dash-region" class="text-primary">GLOBAL</span>
+            </div>
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; font-family:var(--font-mono);" id="dash-name">UNKNOWN</h2>
+          </div>
+          <div class="flex gap-2">
+            <button class="icon-btn" onclick="navTo('shop', document.querySelectorAll('.nav-item')[2])">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+              <span class="cart-count" id="cart-count-1">0</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="hero-panel">
+          <div class="identity-card">
+            <div class="identity-info">
+              <span class="rank-badge" id="dash-rank-badge">NO RANK</span>
+              <h2 id="dash-title">INITIATE</h2>
+              <div style="font-size: 10px; color: var(--text-muted); font-weight: 600; margin-top: 6px; font-family:var(--font-mono);">
+                NEXT RANK: <span id="dash-next-rank" class="text-primary">ROOKIE</span>
+              </div>
+            </div>
+            <div class="xp-ring-container">
+              <div class="xp-big" id="dash-xp">0</div>
+              <div class="xp-label">XP EARNED</div>
+            </div>
+          </div>
+
+          <div class="xp-hud-frame">
+            <div class="progress-track">
+              <div class="progress-fill" id="dash-progress-bar"></div>
+            </div>
+            <div class="xp-hud-header" style="margin-top: 6px;">
+              <span class="xp-pct" id="dash-progress-text">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-grid">
+          <div class="hud-stat">
+            <span class="hud-val" id="dash-streak">0</span>
+            <span class="hud-label">Streak</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-val text-primary" id="dash-sector-rank">--</span>
+            <span class="hud-label">Sector</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-val" id="dash-7day">0</span>
+            <span class="hud-label">7-Day XP</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-val" id="dash-sessions">0</span>
+            <span class="hud-label">Sessions</span>
+          </div>
+        </div>
+
+        <div class="activity-panel">
+          <div class="panel-header">
+            <div class="panel-title">ACTIVITY LOG</div>
+            <div style="font-size: 9px; font-weight: 700; color: var(--text-muted);">LAST 7 DAYS</div>
+          </div>
+          <div class="graph-stage" id="activity-chart"></div>
+        </div>
+
+        <div style="padding: 0 24px 24px;">
+          <h3 style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; font-family:var(--font-mono);">Recent Logs</h3>
+          <div id="recent-logs-list"></div>
+        </div>
+      </section>
+
+      <section id="screen-log" class="screen hidden animate-fade-in">
+        <header class="screen-header">
+          <h2 style="margin:0; letter-spacing: 1px; font-family:var(--font-mono); font-size: 14px; text-transform: uppercase;">Log Transmission</h2>
+          <div class="text-primary text-mono" style="font-size: 12px; font-weight: 700;">ACTIVE</div>
+        </header>
+
+        <div style="padding: 24px;">
+          <div style="margin-bottom: 24px;">
+            <label class="log-section-title">Select Protocol</label>
+            <div class="pill-scroller">
+              <button class="exercise-pill active" onclick="selectExercise('Bench Press', 1.2, this)">Bench Press</button>
+              <button class="exercise-pill" onclick="selectExercise('Squat', 1.5, this)">Squat</button>
+              <button class="exercise-pill" onclick="selectExercise('Deadlift', 1.8, this)">Deadlift</button>
+              <button class="exercise-pill" onclick="selectExercise('Pushups', 0.5, this)">Pushups</button>
+              <button class="exercise-pill" onclick="selectExercise('Pullups', 1.0, this)">Pullups</button>
+              <button class="exercise-pill" onclick="selectExercise('Run (Km)', 10.0, this)">Run (Km)</button>
+            </div>
+          </div>
+
+          <div class="flex gap-4" style="margin-bottom: 24px;">
+            <div class="w-full">
+              <label class="log-section-title">Repetitions</label>
+              <div class="number-control">
+                <button class="control-btn" onclick="adjustLog('reps', -5)">-</button>
+                <span id="log-reps" class="text-mono" style="font-size: 24px; font-weight: 700;">0</span>
+                <button class="control-btn" onclick="adjustLog('reps', 5)">+</button>
+              </div>
+            </div>
+            <div class="w-full">
+              <label class="log-section-title">Load (KG)</label>
+              <div class="number-control">
+                <button class="control-btn" onclick="adjustLog('weight', -5)">-</button>
+                <span id="log-weight" class="text-mono" style="font-size: 24px; font-weight: 700;">0</span>
+                <button class="control-btn" onclick="adjustLog('weight', 5)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <label class="log-section-title">Visual Verification</label>
+            <div class="recorder-box">
+              <div style="text-align:center; z-index: 2;">
+                <button id="btn-record" class="rec-btn" onclick="toggleRecording()"></button>
+                <div id="recording-text" style="margin-top: 12px; font-size: 10px; font-weight: 700; color: #666; letter-spacing: 1px;">TAP TO RECORD</div>
+              </div>
+              <div id="recording-timer" class="hidden" style="position: absolute; top: 16px; right: 20px; color: var(--danger); font-family: var(--font-mono); font-weight: 900;">00:00</div>
+            </div>
+          </div>
+
+          <div class="card" style="display:flex; justify-content: space-between; align-items: center; border-color: var(--primary); background: var(--primary-dim);">
+            <div>
+              <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform:uppercase;">Projected Gain</div>
+              <div class="text-primary text-mono" style="font-size: 24px; font-weight: 900;">+<span id="projected-xp">0</span></div>
+            </div>
+            <button class="primary" style="padding: 10px 24px;" onclick="submitWorkout()">TRANSMIT</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-leagues" class="screen hidden animate-fade-in">
+        <header class="screen-header">
+          <h2 style="margin:0; letter-spacing: 1px; font-family:var(--font-mono); font-size: 14px;">SECTOR LEAGUES</h2>
+        </header>
+        <div style="padding: 24px 24px 24px;">
+          <div id="podium-area" class="podium-stage"></div>
+          <div style="margin-bottom: 10px; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Global Rankings</div>
+          <div id="top20-list"></div>
+        </div>
+      </section>
+
+      <section id="screen-shop" class="screen hidden animate-fade-in">
+        <header class="screen-header">
+          <h2 style="margin:0; letter-spacing: 1px; font-family:var(--font-mono); font-size: 14px;">SUPPLY CHAIN</h2>
+          <button class="icon-btn" onclick="openCart()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            <span class="cart-count" id="cart-count-3">0</span>
+          </button>
+        </header>
+        
+        <div style="padding: 0 24px 24px;">
+          <div class="shop-hero">
+            <div class="shop-hero-content">
+              <div class="shop-tagline">Season 4 Issued</div>
+              <h3 class="shop-title">Tactical<br>Restock</h3>
+            </div>
+          </div>
+
+          <div class="pill-scroller" style="margin-bottom: 24px;">
+            <button class="exercise-pill active" onclick="filterShop('All', this)">ALL</button>
+            <button class="exercise-pill" onclick="filterShop('Hoodies', this)">HOODIES</button>
+            <button class="exercise-pill" onclick="filterShop('T-Shirts', this)">TOPS</button>
+            <button class="exercise-pill" onclick="filterShop('Shorts', this)">BOTTOMS</button>
+          </div>
+
+          <div class="product-grid" id="shop-grid"></div>
+        </div>
+      </section>
+
+      <section id="screen-stats" class="screen hidden animate-fade-in">
+        <header class="screen-header">
+          <h2 style="margin:0; letter-spacing: 1px; font-family:var(--font-mono); font-size: 14px;">SYSTEM CONFIG</h2>
+        </header>
+        <div style="padding: 24px;">
+          <div class="card">
+            <h3 style="margin: 0 0 20px; font-size: 12px; letter-spacing: 1px; color: var(--text-muted);">PROFILE</h3>
+            <div style="margin-bottom: 16px;">
+              <label style="font-size: 10px; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">CALLSIGN</label>
+              <input type="text" id="edit-name">
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="font-size: 10px; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">SECTOR</label>
+              <select id="edit-region">
+                <option value="Global">Global</option>
+                <option value="London">London</option>
+                <option value="Manchester">Manchester</option>
+                <option value="Birmingham">Birmingham</option>
+                <option value="Leeds">Leeds</option>
+                <option value="Glasgow">Glasgow</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 24px;">
+              <label style="font-size: 10px; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">INTERFACE SKIN</label>
+              <select id="edit-skin" onchange="applySkin(this.value)">
+                <option value="minimal">Minimal (Light)</option>
+                <option value="operator">Operator (Dark)</option>
+                <option value="midnight">Midnight (Blue)</option>
+              </select>
+            </div>
+            <button class="primary w-full" onclick="saveProfile()">SAVE CHANGES</button>
+          </div>
+
+          <div class="card" style="border-color: rgba(239, 68, 68, 0.3); background: transparent;">
+            <h3 style="margin: 0 0 16px; font-size: 12px; letter-spacing: 1px; color: var(--danger);">DANGER ZONE</h3>
+            <button style="width: 100%; border-color: var(--danger); color: var(--danger); background: transparent;" onclick="resetApp()">FACTORY RESET</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <nav class="bottom-nav hidden" id="main-nav">
+      <div class="nav-item active" onclick="navTo('base', this)">
+        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+      </div>
+      <div class="nav-item" onclick="navTo('leagues', this)">
+        <svg viewBox="0 0 24 24"><path d="M7.5 21H2V9h5.5v12zm7.25-18h-5.5v18h5.5V3zM22 11h-5.5v10H22V11z"/></svg>
+      </div>
+      <div class="fab-container">
+        <div class="fab-log" onclick="navTo('log', null)">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        </div>
+      </div>
+      <div class="nav-item" onclick="navTo('shop', this)">
+        <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+      </div>
+      <div class="nav-item" onclick="navTo('stats', this)">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      </div>
+    </nav>
+
+    <div id="modal-cart" class="modal-overlay hidden">
+      <div class="modal-content animate-slide-up">
+        <div class="flex justify-between items-center" style="margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 16px; letter-spacing: 1px; font-family:var(--font-mono);">SUPPLY CART</h2>
+          <button onclick="closeModal('modal-cart')" style="border:none; background:none; font-size:18px;">✕</button>
+        </div>
+        <div id="cart-items" style="max-height: 320px; overflow-y: auto; margin-bottom: 24px;"></div>
+        <div class="flex justify-between items-center" style="border-top: 1px solid var(--border); padding-top: 16px; margin-bottom: 20px;">
+          <span style="font-weight: 800; font-size: 12px; font-family:var(--font-mono);">TOTAL</span>
+          <span class="text-primary text-mono" style="font-size: 20px; font-weight: 900;" id="cart-total">$0.00</span>
+        </div>
+        <div class="flex gap-2">
+          <button class="w-full" onclick="clearCart()" style="border-color: var(--border); background: transparent;">CLEAR</button>
+          <button class="primary w-full" onclick="checkout()">CONFIRM ORDER</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-summary" class="modal-overlay hidden">
+      <div class="modal-content animate-slide-up" style="text-align: center;">
+        <div style="width: 80px; height: 80px; border-radius: 50%; background:var(--primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; color: var(--bg-panel); font-size: 32px; box-shadow: var(--shadow-soft);">✔</div>
+        <h2 class="text-primary" style="letter-spacing: 1px; margin: 0 0 6px; font-family:var(--font-mono); font-size: 16px;">LOG SUCCESS</h2>
+        <div class="text-muted text-mono" style="margin-bottom: 32px; font-weight: 900; letter-spacing: 1px; font-size: 24px;">+<span id="summary-xp">0</span> XP</div>
+
+        <div style="text-align: left; background: var(--bg-deep); padding: 20px; border-radius: var(--radius-md);">
+          <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px; letter-spacing:1px; text-transform:uppercase;">Analysis</div>
+          <p id="ai-report-text" style="font-size: 13px; line-height: 1.5; margin: 0; color: var(--text-main); font-family:var(--font-mono);">Calculating...</p>
+        </div>
+
+        <button class="w-full" style="margin-top: 24px;" onclick="closeModal('modal-summary')">DISMISS</button>
+      </div>
+    </div>
+
+    <script>
+      // --- CONSTANTS & MOCK DATA ---
+      const PRODUCTS = [
+        { id: 1, name: "Stealth Hoodie", price: 85.00, cat: "Hoodies", icon: "🧥", desc: "Thermal regulation.", level: "MK-2" },
+        { id: 2, name: "Tac-Vest Lite", price: 45.00, cat: "T-Shirts", icon: "🦺", desc: "Breathable mesh.", level: "STD" },
+        { id: 3, name: "Drill Shorts", price: 50.00, cat: "Shorts", icon: "🩳", desc: "High mobility cut.", level: "MK-1" },
+        { id: 4, name: "Operator Cap", price: 30.00, cat: "Headwear", icon: "🧢", desc: "IR reflective.", level: "STD" },
+        { id: 5, name: "Ration Pack", price: 15.00, cat: "Accessories", icon: "🥪", desc: "Nutrient dense.", level: "BIO" },
+        { id: 6, name: "Hydro Flask", price: 25.00, cat: "Accessories", icon: "🥤", desc: "Vacuum sealed.", level: "STD" },
+      ];
+
+      const RANKS = [
+        { name: "INITIATE", xp: 0 },
+        { name: "ROOKIE", xp: 500 },
+        { name: "OPERATOR", xp: 1500 },
+        { name: "VETERAN", xp: 3500 },
+        { name: "ELITE", xp: 7500 },
+        { name: "COMMANDER", xp: 15000 },
+        { name: "LEGEND", xp: 30000 }
+      ];
+
+      const MOCK_USERS = [
+        { name: "Ghost_Ops", region: "London", xp: 18500 },
+        { name: "Viper_One", region: "Manchester", xp: 14200 },
+        { name: "Tank_Heavy", region: "Global", xp: 13800 },
+        { name: "Sniper_Wolf", region: "London", xp: 12000 },
+        { name: "Medic_6", region: "Birmingham", xp: 11500 },
+        { name: "Spectre", region: "Global", xp: 9500 },
+        { name: "Nomad", region: "Glasgow", xp: 8800 },
+        { name: "Soap_Mac", region: "London", xp: 8200 },
+        { name: "Bravo_Two", region: "Leeds", xp: 7600 },
+        { name: "Kilo_Jules", region: "London", xp: 7400 },
+      ];
+
+      // --- STATE MANAGEMENT ---
+      const DEFAULT_STATE = {
+        user: {
+          name: "",
+          region: "Global",
+          goal: "",
+          skin: "minimal",
+          xp: 0,
+          streak: 0,
+          streakBest: 0,
+          lastWorkout: null,
+          totalReps: 0
+        },
+        logs: [],
+        cart: [],
+        currentLog: { exercise: "Bench Press", multiplier: 1.2, reps: 0, weight: 0 }
+      };
+
+      let state = structuredClone(DEFAULT_STATE);
+
+      function isObj(v) { return v && typeof v === "object" && !Array.isArray(v); }
+
+      function deepMerge(base, incoming) {
+        const out = Array.isArray(base) ? [...base] : { ...base };
+        if (!isObj(incoming) && !Array.isArray(incoming)) return out;
+        for (const k of Object.keys(incoming)) {
+          const b = base?.[k];
+          const v = incoming[k];
+          if (Array.isArray(v)) out[k] = v;
+          else if (isObj(v) && isObj(b)) out[k] = deepMerge(b, v);
+          else out[k] = v;
+        }
+        return out;
+      }
+
+      // --- INIT ---
+      window.addEventListener('DOMContentLoaded', () => {
+        loadState();
+        document.getElementById('app-shell').setAttribute('data-skin', state.user.skin || "minimal");
+
+        ["modal-cart", "modal-summary"].forEach(id => {
+          const overlay = document.getElementById(id);
+          overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) closeModal(id);
+          });
+        });
+
+        if (state.user.name) showApp();
+        else document.getElementById('onboarding').classList.remove('hidden');
+
+        renderShop();
+        updateCartBadge();
+      });
+
+      function loadState() {
+        const saved = localStorage.getItem('unyield_state');
+        if (!saved) { state = structuredClone(DEFAULT_STATE); return; }
+        try {
+          const parsed = JSON.parse(saved);
+          state = deepMerge(structuredClone(DEFAULT_STATE), parsed);
+          if (!Array.isArray(state.logs)) state.logs = [];
+          if (!Array.isArray(state.cart)) state.cart = [];
+          if (!isObj(state.user)) state.user = structuredClone(DEFAULT_STATE.user);
+          if (!isObj(state.currentLog)) state.currentLog = structuredClone(DEFAULT_STATE.currentLog);
+        } catch (e) {
+          console.error("State load error", e);
+          state = structuredClone(DEFAULT_STATE);
+        }
+      }
+
+      function saveState({ skipUI = false } = {}) {
+        localStorage.setItem('unyield_state', JSON.stringify(state));
+        updateCartBadge();
+        if (!skipUI) updateUI();
+      }
+
+      // --- SKIN LOGIC ---
+      function applySkin(skinName) {
+        state.user.skin = skinName;
+        document.getElementById('app-shell').setAttribute('data-skin', skinName);
+        saveState();
+        showToast(`INTERFACE: ${skinName.toUpperCase()}`);
+      }
+
+      // --- ONBOARDING ---
+      function nextOnboardStep(step) {
+        if (step === 2) {
+          const val = document.getElementById('input-callsign').value.trim();
+          if (!val) return showToast("CALLSIGN REQUIRED");
+          state.user.name = val.toUpperCase();
+          saveState({ skipUI: true });
+        }
+        if (step === 3) {
+          state.user.region = document.getElementById('input-region').value;
+          saveState({ skipUI: true });
+        }
+
+        document.querySelector(`#step-${step-1}`).classList.add('hidden');
+        document.getElementById(`step-${step}`).classList.remove('hidden');
+      }
+
+      function prevOnboardStep(step) {
+        document.querySelector(`#step-${step+1}`).classList.add('hidden');
+        document.getElementById(`step-${step}`).classList.remove('hidden');
+      }
+
+      function selectGoal(goal, el) {
+        document.getElementById('input-goal').value = goal;
+        document.querySelectorAll('.goal-btn').forEach(b => {
+          b.style.background = 'var(--bg-panel)';
+          b.style.color = 'var(--text-main)';
+          b.style.borderColor = 'var(--border)';
+        });
+        el.style.background = 'var(--primary)';
+        el.style.color = 'var(--bg-panel)';
+        el.style.borderColor = 'transparent';
+        const skin = document.getElementById('app-shell').getAttribute('data-skin');
+        if (skin === 'operator' || skin === 'midnight') el.style.color = 'var(--bg-deep)';
+      }
+
+      function completeOnboarding() {
+        const g = document.getElementById('input-goal').value;
+        if (!g) return showToast("SELECT DIRECTIVE");
+        state.user.goal = g;
+        saveState({ skipUI: true });
+        document.getElementById('onboarding').classList.add('hidden');
+        showApp();
+      }
+
+      function showApp() {
+        document.getElementById('app-container').classList.remove('hidden');
+        document.getElementById('main-nav').classList.remove('hidden');
+        updateUI();
+        navTo('base', document.querySelector('.nav-item'));
+      }
+
+      // --- NAV ---
+      function navTo(screenId, el) {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        if (el) el.classList.add('active');
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(`screen-${screenId}`).classList.remove('hidden');
+
+        if (screenId === 'base') updateUI();
+        if (screenId === 'shop') renderShop();
+        if (screenId === 'leagues') renderLeaderboardSimple();
+        if (screenId === 'log') resetLogForm();
+        if (screenId === 'stats') {
+          document.getElementById('edit-name').value = state.user.name;
+          document.getElementById('edit-region').value = state.user.region;
+          document.getElementById('edit-skin').value = state.user.skin || "minimal";
+        }
+        updateCartBadge();
+      }
+
+      // --- LOGIC: UI UPDATES ---
+      function updateUI() {
+        if (!state.user?.name) return;
+
+        document.getElementById('dash-name').innerText = state.user.name;
+        document.getElementById('dash-region').innerText = (state.user.region || "Global").toUpperCase();
+        document.getElementById('dash-xp').innerText = (state.user.xp || 0).toLocaleString();
+        document.getElementById('dash-streak').innerText = state.user.streak || 0;
+        document.getElementById('dash-sessions').innerText = (state.logs || []).length;
+
+        let currentRank = RANKS[0];
+        let nextRank = RANKS[1];
+        for (let i = 0; i < RANKS.length; i++) {
+          if ((state.user.xp || 0) >= RANKS[i].xp) {
+            currentRank = RANKS[i];
+            nextRank = RANKS[i+1] || null;
+          }
+        }
+
+        document.getElementById('dash-title').innerText = currentRank.name;
+        document.getElementById('dash-rank-badge').innerText = `LEVEL ${Math.floor((state.user.xp || 0)/1000) + 1}`;
+
+        if (nextRank) {
+          document.getElementById('dash-next-rank').innerText = nextRank.name;
+          const dist = nextRank.xp - currentRank.xp;
+          const prog = (state.user.xp || 0) - currentRank.xp;
+          const pct = Math.min(100, Math.max(0, (prog / dist) * 100));
+          document.getElementById('dash-progress-bar').style.width = `${pct}%`;
+          document.getElementById('dash-progress-text').innerText = `${Math.floor(pct)}%`;
+        } else {
+          document.getElementById('dash-next-rank').innerText = "MAX";
+          document.getElementById('dash-progress-bar').style.width = "100%";
+          document.getElementById('dash-progress-text').innerText = "100%";
+        }
+
+        const leaderboard = buildLeaderboard(state.user.region === "Global" ? "Global" : state.user.region);
+        const myRank = leaderboard.findIndex(u => u.isMe) + 1;
+        document.getElementById('dash-sector-rank').innerText = myRank > 0 ? `#${myRank}` : "-";
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const recentSum = (state.logs || [])
+          .filter(l => new Date(l.date) > sevenDaysAgo)
+          .reduce((a, b) => a + (b.xp || 0), 0);
+        document.getElementById('dash-7day').innerText = recentSum;
+
+        renderActivityChart();
+        renderRecentLogs();
+      }
+
+      function renderActivityChart() {
+        const container = document.getElementById('activity-chart');
+        container.innerHTML = "";
+        const days = ['S','M','T','W','T','F','S'];
+        const today = new Date();
+
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dateKey = d.toLocaleDateString();
+          const dayLogs = (state.logs || []).filter(l => new Date(l.date).toLocaleDateString() === dateKey);
+          const total = dayLogs.reduce((acc, curr) => acc + (curr.xp || 0), 0);
+
+          let heightPct = Math.min(100, (total / 600) * 100);
+          const hasData = total > 0;
+          const barClass = hasData ? "graph-bar has-data" : "graph-bar";
+
+          const col = document.createElement('div');
+          col.className = 'graph-col';
+          col.onclick = () => { if (total > 0) showToast(`${total} XP`); };
+          col.innerHTML = `
+            <div class="${barClass}" style="height: ${Math.max(4, heightPct)}%"></div>
+            <div class="graph-day">${days[d.getDay()]}</div>
+          `;
+          container.appendChild(col);
+        }
+      }
+
+      function renderRecentLogs() {
+        const list = document.getElementById('recent-logs-list');
+        if (!state.logs || state.logs.length === 0) {
+          list.innerHTML = `<div class="text-muted" style="text-align:center; padding:10px; font-size:11px;">NO RECENT ACTIVITY</div>`;
+          return;
+        }
+
+        list.innerHTML = state.logs.slice(0, 3).map(l => `
+          <div class="card" style="padding: 16px; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 800; color: var(--text-main); font-family:var(--font-mono);">${l.exercise || "—"}</div>
+              <div style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top:4px;">
+                ${new Date(l.date).toLocaleDateString()}
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="text-primary text-mono" style="font-weight:900;">+${l.xp || 0}</div>
+              <div style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono);">${l.reps || 0} x ${l.weight || 0}kg</div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // --- LOGGING WORKFLOW ---
+      function selectExercise(name, mult, el) {
+        state.currentLog.exercise = name;
+        state.currentLog.multiplier = mult;
+        document.querySelectorAll('#screen-log .exercise-pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        calcPreviewXP();
+      }
+
+      function adjustLog(type, delta) {
+        let val = (type === 'reps') ? state.currentLog.reps : state.currentLog.weight;
+        val += delta;
+        if (val < 0) val = 0;
+
+        if (type === 'reps') {
+          state.currentLog.reps = val;
+          document.getElementById('log-reps').innerText = val;
+        } else {
+          state.currentLog.weight = val;
+          document.getElementById('log-weight').innerText = val;
+        }
+        calcPreviewXP();
+      }
+
+      function calcPreviewXP() {
+        const reps = state.currentLog.reps || 0;
+        const mult = state.currentLog.multiplier || 1;
+        const weight = state.currentLog.weight || 0;
+        const base = reps * mult;
+        const load = weight * 0.5;
+        const streakBonus = Math.min((state.user.streak || 0) * 5, 50);
+        const total = Math.floor(base + load + streakBonus);
+        document.getElementById('projected-xp').innerText = total;
+        return total;
+      }
+
+      function resetLogForm() {
+        state.currentLog = { exercise: "Bench Press", multiplier: 1.2, reps: 0, weight: 0 };
+        document.getElementById('log-reps').innerText = "0";
+        document.getElementById('log-weight').innerText = "0";
+        document.querySelectorAll('#screen-log .exercise-pill').forEach(p => p.classList.remove('active'));
+        document.querySelector('#screen-log .exercise-pill').classList.add('active');
+        calcPreviewXP();
+
+        clearInterval(recInterval);
+        const btn = document.getElementById('btn-record');
+        btn.classList.remove('recording');
+        document.getElementById('recording-timer').classList.add('hidden');
+        document.getElementById('recording-text').innerText = "TAP TO RECORD";
+      }
+
+      let recInterval;
+      function toggleRecording() {
+        const btn = document.getElementById('btn-record');
+        const timer = document.getElementById('recording-timer');
+        const txt = document.getElementById('recording-text');
+
+        if (btn.classList.contains('recording')) {
+          clearInterval(recInterval);
+          btn.classList.remove('recording');
+          timer.classList.add('hidden');
+          txt.innerText = "PROOF CAPTURED";
+          showToast("PROOF CAPTURED");
+        } else {
+          btn.classList.add('recording');
+          timer.classList.remove('hidden');
+          txt.innerText = "RECORDING...";
+          let sec = 0;
+          timer.innerText = "00:00";
+          recInterval = setInterval(() => {
+            sec++;
+            const m = Math.floor(sec/60).toString().padStart(2,'0');
+            const s = (sec%60).toString().padStart(2,'0');
+            timer.innerText = `${m}:${s}`;
+          }, 1000);
+        }
+      }
+
+      function submitWorkout() {
+        if ((state.currentLog.reps || 0) <= 0 && state.currentLog.exercise !== "Run (Km)") {
+          return showToast("INVALID ENTRY");
+        }
+        const xp = calcPreviewXP();
+        const now = new Date();
+
+        if (state.user.lastWorkout) {
+          const last = new Date(state.user.lastWorkout);
+          const diffTime = Math.abs(now - last);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays <= 2) state.user.streak = (state.user.streak || 0) + 1;
+          else state.user.streak = 1;
+        } else {
+          state.user.streak = 1;
+        }
+        state.user.streakBest = Math.max(state.user.streakBest || 0, state.user.streak || 0);
+        state.user.xp = (state.user.xp || 0) + xp;
+        state.user.lastWorkout = now.toISOString();
+
+        state.logs.unshift({
+          id: Date.now(),
+          exercise: state.currentLog.exercise,
+          reps: state.currentLog.reps,
+          weight: state.currentLog.weight,
+          date: now.toISOString(),
+          xp: xp
+        });
+
+        saveState();
+
+        document.getElementById('summary-xp').innerText = xp;
+        document.getElementById('modal-summary').classList.remove('hidden');
+
+        const closeBtn = document.querySelector('#modal-summary button');
+        closeBtn.onclick = () => {
+          closeModal('modal-summary');
+          navTo('base', document.querySelectorAll('.nav-item')[0]);
+        };
+
+        setTimeout(() => {
+          const phrases = [
+            "Intensity acceptable. Good work.",
+            "Volume increased. Recovery protocols recommended.",
+            "Consistency is the primary metric. Keep going.",
+            "Data uploaded. Sector rank updated."
+          ];
+          document.getElementById('ai-report-text').innerText = phrases[Math.floor(Math.random() * phrases.length)];
+        }, 600);
+      }
+
+      // --- LEADERBOARD LOGIC ---
+      function buildLeaderboard(region) {
+        let list = [...MOCK_USERS];
+        list.push({ name: state.user.name, region: state.user.region, xp: state.user.xp || 0, isMe: true });
+        if (region !== "Global") list = list.filter(u => u.region === region);
+        return list.sort((a,b) => (b.xp || 0) - (a.xp || 0));
+      }
+
+      function renderLeaderboardSimple() {
+        const region = "Global";
+        const sorted = buildLeaderboard(region);
+
+        const podiumEl = document.getElementById('podium-area');
+        const top3 = [sorted[1], sorted[0], sorted[2]];
+
+        let html = '';
+        if (top3[0]) {
+          html += `<div class="podium-spot rank-2">
+            <div class="podium-avatar">${top3[0].name.substring(0,2).toUpperCase()}</div>
+            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">${top3[0].name}</div>
+            <div class="text-mono text-primary" style="font-size:9px;">${top3[0].xp}</div>
+            <div class="podium-base">2</div>
+          </div>`;
+        } else html += `<div class="podium-spot rank-2" style="opacity:0"></div>`;
+
+        if (top3[1]) {
+          html += `<div class="podium-spot rank-1">
+            <div style="margin-bottom:-10px; z-index:2; font-size:20px;">👑</div>
+            <div class="podium-avatar">${top3[1].name.substring(0,2).toUpperCase()}</div>
+            <div style="font-size:11px; font-weight:800; margin-bottom:2px;">${top3[1].name}</div>
+            <div class="text-mono text-primary" style="font-size:10px;">${top3[1].xp}</div>
+            <div class="podium-base">1</div>
+          </div>`;
+        }
+
+        if (top3[2]) {
+          html += `<div class="podium-spot rank-3">
+            <div class="podium-avatar">${top3[2].name.substring(0,2).toUpperCase()}</div>
+            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">${top3[2].name}</div>
+            <div class="text-mono text-primary" style="font-size:9px;">${top3[2].xp}</div>
+            <div class="podium-base">3</div>
+          </div>`;
+        } else html += `<div class="podium-spot rank-3" style="opacity:0"></div>`;
+        podiumEl.innerHTML = html;
+
+        const listEl = document.getElementById('top20-list');
+        const rest = sorted.slice(3, 15);
+        if (rest.length === 0) {
+          listEl.innerHTML = `<div style="text-align:center; font-size:10px; color:var(--text-muted); padding:10px;">NO DATA</div>`;
+        } else {
+          listEl.innerHTML = rest.map((u, i) => `
+            <div class="lb-card ${u.isMe ? 'is-me' : ''}">
+              <div class="flex items-center gap-3">
+                <div class="text-mono text-muted" style="width:20px; text-align:center;">${i+4}</div>
+                <div>${u.name}</div>
+              </div>
+              <div class="text-mono text-primary">${u.xp}</div>
+            </div>
+          `).join('');
+        }
+      }
+
+      // --- SHOP LOGIC ---
+      function renderShop(list = PRODUCTS) {
+        const grid = document.getElementById('shop-grid');
+        grid.innerHTML = list.map(p => `
+          <div class="product-card">
+            <div class="product-schematic" onclick="showToast('${escapeForToast(p.name.toUpperCase())}')">
+              ${p.icon}
+              <div class="rarity-badge">${p.level}</div>
+            </div>
+            <div class="product-details">
+              <div>
+                <div class="product-name">${p.name}</div>
+                <div class="product-desc">${p.desc}</div>
+              </div>
+              <div class="product-footer">
+                <div class="product-price">$${p.price.toFixed(0)}</div>
+                <button class="btn-add-grid" onclick="addToCart(${p.id})">ADD</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function filterShop(cat, el) {
+        document.querySelectorAll('#screen-shop .exercise-pill').forEach(b => b.classList.remove('active'));
+        if (el) el.classList.add('active');
+        const filtered = cat === 'All' ? PRODUCTS : PRODUCTS.filter(p => p.cat === cat);
+        renderShop(filtered);
+      }
+
+      function addToCart(id) {
+        const p = PRODUCTS.find(x => x.id === id);
+        if (!p) return;
+        if (!Array.isArray(state.cart)) state.cart = [];
+        const exist = state.cart.find(x => x.id === id);
+        if (exist) exist.qty = (exist.qty || 0) + 1;
+        else state.cart.push({ ...p, qty: 1 });
+        saveState({ skipUI: true });
+        updateCartBadge();
+        showToast("ADDED TO SUPPLY");
+      }
+
+      function updateCartBadge() {
+        const cart = Array.isArray(state.cart) ? state.cart : [];
+        const c = cart.reduce((a,b)=> a + (b.qty || 0), 0);
+        document.querySelectorAll('[id^="cart-count"]').forEach(el => el.innerText = c);
+      }
+
+      // --- CART ---
+      function renderCart() {
+        const el = document.getElementById('cart-items');
+        const cart = Array.isArray(state.cart) ? state.cart : [];
+        if (cart.length === 0) {
+          el.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:11px; font-weight:700;">SUPPLY CART EMPTY</div>`;
+        } else {
+          el.innerHTML = cart.map(item => `
+            <div class="card" style="box-shadow:none; padding:12px; margin-bottom:8px;">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                  <div style="font-size:20px;">${item.icon || "📦"}</div>
+                  <div>
+                    <div style="font-size:12px; font-weight:800;">${item.name || "ITEM"}</div>
+                    <div class="text-muted" style="font-size:10px; font-family:var(--font-mono);">$${Number(item.price || 0).toFixed(2)} ea</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button style="width:24px; height:24px; padding:0; display:flex; align-items:center; justify-content:center;" onclick="setCartQty(${item.id}, -1)">-</button>
+                  <span class="text-mono" style="font-size:12px; font-weight:800;">${item.qty}</span>
+                  <button style="width:24px; height:24px; padding:0; display:flex; align-items:center; justify-content:center;" onclick="setCartQty(${item.id}, 1)">+</button>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+        const tot = cart.reduce((a,b)=> a + (Number(b.price || 0) * Number(b.qty || 0)), 0);
+        document.getElementById('cart-total').innerText = `$${tot.toFixed(2)}`;
+      }
+
+      function openCart() {
+        if (!Array.isArray(state.cart)) state.cart = [];
+        renderCart();
+        document.getElementById('modal-cart').classList.remove('hidden');
+      }
+
+      function setCartQty(id, delta) {
+        if (!Array.isArray(state.cart)) state.cart = [];
+        const item = state.cart.find(x => x.id === id);
+        if (!item) return;
+        item.qty = Math.max(0, (item.qty || 0) + delta);
+        if (item.qty === 0) state.cart = state.cart.filter(x => x.id !== id);
+        saveState({ skipUI: true });
+        updateCartBadge();
+        renderCart();
+      }
+
+      function clearCart() {
+        state.cart = [];
+        saveState({ skipUI: true });
+        updateCartBadge();
+        renderCart();
+        showToast("CART CLEARED");
+      }
+
+      function checkout() {
+        if (!Array.isArray(state.cart) || state.cart.length === 0) return showToast("CART EMPTY");
+        state.cart = [];
+        saveState({ skipUI: true });
+        updateCartBadge();
+        closeModal('modal-cart');
+        showToast("ORDER PROCESSED");
+      }
+
+      // --- SETTINGS ---
+      function saveProfile() {
+        const name = document.getElementById('edit-name').value.trim();
+        if (name) state.user.name = name.toUpperCase();
+        state.user.region = document.getElementById('edit-region').value;
+        saveState();
+        showToast("PROFILE UPDATED");
+      }
+
+      function resetApp() {
+        if (confirm("CRITICAL WARNING: WIPE ALL DATA?")) {
+          localStorage.removeItem('unyield_state');
+          location.reload();
+        }
+      }
+
+      // --- UTIL ---
+      function closeModal(id) {
+        document.getElementById(id).classList.add('hidden');
+      }
+
+      function showToast(msg) {
+        const container = document.getElementById('toast-container');
+        const t = document.createElement('div');
+        t.className = 'toast animate-slide-up';
+        t.innerText = msg;
+        container.appendChild(t);
+        setTimeout(() => {
+          t.style.opacity = '0';
+          setTimeout(() => t.remove(), 300);
+        }, 2000);
+      }
+
+      function escapeForToast(str) {
+        return String(str).replace(/'/g, "\\'");
+      }
+    </script>
+  </div>
+</body>
+</html>
+

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Athlete Leaderboard</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            background-color: #09090b; /* Zinc 950 */
+            color: #f4f4f5; 
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .font-condensed { font-family: 'Oswald', sans-serif; }
+        
+        /* Subtle Gradient Background */
+        .premium-bg {
+            background: radial-gradient(circle at 50% 0%, #27272a 0%, #09090b 60%);
+        }
+
+        /* Metallic Text Gradients */
+        .text-gold {
+            background: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-silver {
+            background: linear-gradient(135deg, #e0e0e0, #ffffff, #a0a0a0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-bronze {
+            background: linear-gradient(135deg, #cd7f32, #ffcba4, #8c5a2b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Glassmorphism - Matte Finish */
+        .glass-matte {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Borders */
+        .border-gold { border-color: #b38728; }
+        .border-silver { border-color: #a1a1aa; }
+        .border-bronze { border-color: #92400e; }
+
+        /* Animation */
+        @keyframes slide-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const Icon = ({ name, size=20, className }) => {
+            React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} width={size} height={size} className={className}></i>;
+        };
+
+        const DATA = [
+            { id: 2, rank: 2, name: "M. DAVIES", score: 2850, lift: "142kg", growth: "+12%", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d" },
+            { id: 1, rank: 1, name: "J. STIRLING", score: 3120, lift: "155kg", growth: "+5%", avatar: "https://i.pravatar.cc/150?u=a042581f4e29026024d" },
+            { id: 3, rank: 3, name: "A. KOWALSKI", score: 2700, lift: "138kg", growth: "+8%", avatar: "https://i.pravatar.cc/150?u=a04258114e29026302d" },
+        ];
+
+        const PodiumPillar = ({ data, delay }) => {
+            const isFirst = data.rank === 1;
+            
+            // Determine styling based on rank
+            let colorClass = "text-bronze border-bronze/30";
+            let heightClass = "h-48";
+            let bgGradient = "from-orange-900/20 to-transparent";
+            
+            if (data.rank === 1) {
+                colorClass = "text-gold border-yellow-600/30";
+                heightClass = "h-64";
+                bgGradient = "from-yellow-900/20 to-transparent";
+            } else if (data.rank === 2) {
+                colorClass = "text-silver border-zinc-400/30";
+                heightClass = "h-52";
+                bgGradient = "from-zinc-700/20 to-transparent";
+            }
+
+            return (
+                <div 
+                    className="flex flex-col items-center justify-end w-1/3 opacity-0 animate-slide-up"
+                    style={{ animationDelay: `${delay}ms` }}
+                >
+                    {/* Avatar Circle */}
+                    <div className={`relative mb-4 ${isFirst ? 'scale-110' : 'scale-100 grayscale hover:grayscale-0 transition-all'}`}>
+                        {isFirst && (
+                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-yellow-500">
+                                <Icon name="crown" size={20} fill="currentColor" />
+                            </div>
+                        )}
+                        <div className={`w-16 h-16 rounded-full p-1 border ${colorClass.split(' ')[1]}`}>
+                            <img src={data.avatar} alt={data.name} className="w-full h-full rounded-full object-cover opacity-90" />
+                        </div>
+                        <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 flex items-center justify-center rounded bg-zinc-900 border ${colorClass.split(' ')[1]} text-xs font-bold`}>
+                            {data.rank}
+                        </div>
+                    </div>
+
+                    {/* The Pillar */}
+                    <div className={`
+                        w-full ${heightClass} 
+                        relative flex flex-col items-center pt-6
+                        border-t border-x ${colorClass.split(' ')[1]}
+                        bg-gradient-to-b ${bgGradient}
+                        rounded-t-sm
+                    `}>
+                        {/* Name - Vertical on mobile if needed, or truncated */}
+                        <h3 className="font-condensed font-bold text-sm tracking-wider text-zinc-300 text-center mb-1">
+                            {data.name}
+                        </h3>
+                        
+                        {/* Key Metric */}
+                        <div className={`font-condensed text-xl font-bold ${colorClass.split(' ')[0]}`}>
+                            {data.score}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-widest text-zinc-600 mt-1">PTS</div>
+
+                        {/* Secondary Stats (Visual clutter reduction: only show on tall pillars or active) */}
+                        <div className="mt-auto w-full border-t border-white/5 p-3 text-center">
+                            <div className="text-[10px] text-zinc-500 uppercase">Bench Max</div>
+                            <div className="text-xs font-medium text-zinc-300">{data.lift}</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ListRow = ({ rank, name, score, delta }) => (
+            <div className="flex items-center justify-between py-4 border-b border-zinc-800/50 hover:bg-white/5 transition-colors px-2">
+                <div className="flex items-center gap-4">
+                    <div className="font-condensed text-zinc-500 font-bold w-6">{rank}</div>
+                    <div className="flex flex-col">
+                        <span className="font-medium text-sm text-zinc-200 tracking-wide">{name}</span>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Pro Division</span>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className="font-condensed font-bold text-zinc-300">{score}</div>
+                    <div className="text-[10px] text-green-500 flex items-center justify-end gap-0.5">
+                        <Icon name="arrow-up" size={10} /> {delta}
+                    </div>
+                </div>
+            </div>
+        );
+
+        const App = () => {
+            return (
+                <div className="min-h-screen premium-bg text-zinc-200 pb-24 relative">
+                    
+                    {/* Top Nav */}
+                    <nav className="flex items-center justify-between p-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-zinc-100 text-black flex items-center justify-center font-bold tracking-tighter">
+                                EL
+                            </div>
+                            <span className="font-condensed font-bold text-lg tracking-widest text-zinc-100">ELITE<span className="text-zinc-600">LIFT</span></span>
+                        </div>
+                        <Icon name="menu" className="text-zinc-400" />
+                    </nav>
+
+                    {/* Context Header */}
+                    <header className="px-6 mb-8 text-center">
+                        <h1 className="text-sm font-medium text-zinc-500 uppercase tracking-[0.2em] mb-2">Global Leaderboard</h1>
+                        <h2 className="font-condensed text-3xl font-bold text-white uppercase italic">Season 04 Finals</h2>
+                    </header>
+
+                    {/* Podium Area */}
+                    <div className="px-4 mb-8">
+                        <div className="flex items-end justify-center gap-2 border-b border-zinc-800">
+                            {/* 2nd Place */}
+                            <PodiumPillar data={DATA[0]} delay={100} />
+                            {/* 1st Place */}
+                            <PodiumPillar data={DATA[1]} delay={0} />
+                            {/* 3rd Place */}
+                            <PodiumPillar data={DATA[2]} delay={200} />
+                        </div>
+                    </div>
+
+                    {/* List Section */}
+                    <div className="px-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Runners Up</h3>
+                            <button className="text-xs text-zinc-400 border border-zinc-700 px-3 py-1 hover:bg-zinc-800 transition">Filter: Global</button>
+                        </div>
+                        
+                        <div className="flex flex-col">
+                            <ListRow rank="04" name="D. JOHNSON" score="2,650" delta="1.2%" />
+                            <ListRow rank="05" name="K. YAMATO" score="2,540" delta="0.8%" />
+                            <ListRow rank="06" name="S. WILLIAMS" score="2,410" delta="2.1%" />
+                            <ListRow rank="07" name="R. CHEN" score="2,380" delta="0.4%" />
+                        </div>
+                    </div>
+
+                    {/* User's Fixed Stats Bar */}
+                    <div className="fixed bottom-0 left-0 right-0 glass-matte border-t border-zinc-700/50 p-4 pb-6 z-50">
+                        <div className="max-w-md mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <div className="w-10 h-10 bg-zinc-800 rounded flex items-center justify-center border border-zinc-600">
+                                        <Icon name="user" size={20} className="text-zinc-400" />
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white text-[10px] font-bold flex items-center justify-center rounded-sm">
+                                        ↓
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Your Rank</div>
+                                    <div className="font-condensed font-bold text-lg text-white">#12 <span className="text-zinc-600 text-sm font-normal">/ 2,450</span></div>
+                                </div>
+                            </div>
+                            
+                            <div className="text-right">
+                                <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Next Tier</div>
+                                <div className="font-condensed font-bold text-lg text-white">140 <span className="text-xs text-zinc-500 font-normal">PTS</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
