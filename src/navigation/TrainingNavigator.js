@@ -5,20 +5,18 @@ import TemplateBuilderScreen from '../screens/TemplateBuilderScreen';
 import ActiveSessionScreen from '../screens/ActiveSessionScreen';
 import SessionHistoryScreen from '../screens/SessionHistoryScreen';
 import SessionDetailScreen from '../screens/SessionDetailScreen';
-import TrainingReportScreen from '../screens/TrainingReportScreen';
 
 const Stack = createNativeStackNavigator();
 
 function TrainingNavigator() {
   return (
     <Stack.Navigator
-      initialRouteName="TrainingReport"
+      initialRouteName="WorkoutHome"
       screenOptions={{
         headerShown: false,
         animation: 'default',
       }}
     >
-      <Stack.Screen name="TrainingReport" component={TrainingReportScreen} />
       <Stack.Screen name="WorkoutHome" component={WorkoutHomeScreen} />
       <Stack.Screen name="TemplateBuilder" component={TemplateBuilderScreen} />
       <Stack.Screen name="ActiveSession" component={ActiveSessionScreen} />

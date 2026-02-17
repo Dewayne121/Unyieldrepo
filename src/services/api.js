@@ -1,12 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Production API URL
-const API_BASE_URL = 'https://unyield-main.onrender.com';
+// Production API URL (Railway)
+const API_BASE_URL = 'https://unyielding-api-production.up.railway.app';
+
+// Local development server (uncomment for local development)
+// const API_BASE_URL = 'http://localhost:3000';
 
 const TOKEN_KEY = 'unyield_auth_token';
 
 // Upload timeout in milliseconds
 const UPLOAD_TIMEOUT = 120000; // 2 minutes
+const BLUR_TIMEOUT = 300000; // 5 minutes
 
 class ApiService {
   constructor() {
@@ -183,10 +187,10 @@ class ApiService {
   }
 
   // Auth endpoints
-  async register(email, password, username) {
+  async register(email, password, username, inviteCode) {
     const response = await this.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, username }),
+      body: JSON.stringify({ email, password, username, inviteCode }),
     });
     if (response.data?.token) {
       await this.setToken(response.data.token);
@@ -261,6 +265,13 @@ class ApiService {
     return response;
   }
 
+  async changePassword(currentPassword, newPassword) {
+    return this.request('/api/users/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   // Workout endpoints
   async getWorkouts(params = {}) {
     const query = new URLSearchParams(params).toString();
@@ -288,6 +299,10 @@ class ApiService {
 
   async getTopLeaderboard(count = 10, region = 'Global') {
     return this.request(`/api/leaderboard/top?count=${count}&region=${region}`);
+  }
+
+  async getWeightClasses() {
+    return this.request('/api/leaderboard/weight-classes');
   }
 
   // Challenge endpoints
@@ -382,6 +397,41 @@ class ApiService {
     return this.request(`/api/admin/challenges/pending-submissions${query ? `?${query}` : ''}`);
   }
 
+  async getMyInviteCodes() {
+    return this.request('/api/auth/invites');
+  }
+
+  async generateInviteCode() {
+    return this.request('/api/auth/invites', {
+      method: 'POST',
+    });
+  }
+
+  async sendAdminNotification({ userIds, type = 'welcome', title, message, data = {} }) {
+    return this.request('/api/admin/notifications/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        userIds,
+        type,
+        title,
+        message,
+        data,
+      }),
+    });
+  }
+
+  async broadcastAdminNotification({ type = 'welcome', title, message, data = {} }) {
+    return this.request('/api/admin/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        title,
+        message,
+        data,
+      }),
+    });
+  }
+
   async getMyChallengeSubmissions() {
     return this.request('/api/challenges/my-submissions');
   }
@@ -401,6 +451,24 @@ class ApiService {
   async markAllNotificationsRead() {
     return this.request('/api/notifications/mark-all-read', {
       method: 'POST',
+    });
+  }
+
+  async registerPushToken(pushToken) {
+    return this.request('/api/notifications/push-token', {
+      method: 'POST',
+      body: JSON.stringify({ pushToken }),
+    });
+  }
+
+  async getNotificationPreferences() {
+    return this.request('/api/notifications/preferences');
+  }
+
+  async updateNotificationPreferences(preferences) {
+    return this.request('/api/notifications/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(preferences),
     });
   }
 
@@ -636,13 +704,63 @@ class ApiService {
     });
   }
 
-  // Blur faces in video
+  // Blur faces in video using the Python faceblurapi service
   async blurVideo(videoUrl) {
     console.log('[API] blurVideo called with videoUrl:', videoUrl?.substring(0, 50) + '...');
-    return this.request('/api/videos/blur', {
-      method: 'POST',
-      body: JSON.stringify({ videoUrl }),
-    });
+
+    const FACE_BLUR_API_URL = process.env.EXPO_PUBLIC_FACE_BLUR_API_URL || 'https://unyield-faceblur-api-production.up.railway.app';
+
+    try {
+      const response = await fetch(`${FACE_BLUR_API_URL}/blur`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoUrl }),
+      });
+
+      const data = await response.json();
+      console.log('[API] blurVideo response:', data.success ? 'success' : data.error);
+
+      // Transform response to match expected format
+      if (data.success && data.data) {
+        return {
+          success: true,
+          data: {
+            blurredVideoUrl: data.data.blurredVideoUrl,
+            originalVideoUrl: data.data.originalVideoUrl,
+            facesFound: data.data.facesDetected,
+            facesDetected: data.data.facesDetected,
+            framesProcessed: data.data.framesProcessed,
+            processingTimeMs: data.data.processingTimeMs,
+          }
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('[API] blurVideo error:', error);
+      return { success: false, error: error.message || 'Face blur service unavailable' };
+    }
+  }
+
+  // Detect faces in video without blurring (for testing)
+  async detectFaces(videoUrl) {
+    const FACE_BLUR_API_URL = process.env.EXPO_PUBLIC_FACE_BLUR_API_URL || 'https://unyield-faceblur-api-production.up.railway.app';
+
+    try {
+      const response = await fetch(`${FACE_BLUR_API_URL}/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoUrl }),
+      });
+
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 }
 

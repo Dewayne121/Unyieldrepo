@@ -5,18 +5,53 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { NotificationItem } from '../components/common';
 import { Colors, Spacing, Typography, BorderRadius } from '../constants/colors';
 
 const BR = BorderRadius;
 
-export default function NotificationsScreen() {
+export default function NotificationsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { notifications, markAllNotificationsRead, unreadCount } = useApp();
+  const {
+    notifications,
+    markAllNotificationsRead,
+    unreadCount,
+    refreshNotifications,
+    markNotificationRead,
+    notificationsLoading,
+  } = useApp();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshNotifications().catch(() => {});
+    }, [refreshNotifications])
+  );
+
+  const handleNotificationPress = (notification) => {
+    if (!notification?.data?.screen) return;
+    const { screen, ...params } = notification.data;
+    navigation.navigate(screen, params);
+  };
+
+  if (notificationsLoading && (!notifications || notifications.length === 0)) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+          <Text style={styles.title}>Notifications</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!notifications || notifications.length === 0) {
     return (
@@ -60,7 +95,8 @@ export default function NotificationsScreen() {
           <NotificationItem
             key={notification.id}
             notification={notification}
-            onRead={() => {}}
+            onRead={() => markNotificationRead(notification.id)}
+            onPress={handleNotificationPress}
           />
         ))}
       </ScrollView>
@@ -125,5 +161,16 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  loadingText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
   },
 });

@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { SKINS, Typography, Spacing, BorderRadius } from '../constants/colors';
 import api from '../services/api';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 const FILTERS = [
   { key: 'active', label: 'LIVE' },
@@ -27,12 +27,14 @@ export default function CompeteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { user } = useApp();
   const { theme, skin } = useTheme();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [challenges, setChallenges] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState('active');
   const [joining, setJoining] = useState(null);
+  const getChallengeId = (challenge) => challenge?.id || challenge?._id || null;
 
   useEffect(() => {
     loadChallenges();
@@ -66,18 +68,19 @@ export default function CompeteScreen({ navigation }) {
   };
 
   const confirmLeave = (challenge) => {
-    Alert.alert(
-      "Leave Challenge?",
-      "You will lose your current progress in this challenge. Are you sure?",
-      [
+    showAlert({
+      title: "Leave Challenge?",
+      message: "You will lose your current progress in this challenge. Are you sure?",
+      icon: 'warning',
+      buttons: [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Leave", 
-          style: "destructive", 
-          onPress: () => handleJoinLeave(challenge) 
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: () => handleJoinLeave(challenge)
         }
       ]
-    );
+    });
   };
 
   const handleJoinLeave = async (challenge) => {
@@ -90,19 +93,37 @@ export default function CompeteScreen({ navigation }) {
     }
 
     try {
-      setJoining(challenge._id);
+      const challengeId = getChallengeId(challenge);
+      if (!challengeId) {
+        throw new Error('Challenge ID is missing.');
+      }
+      setJoining(challengeId);
       if (challenge.joined) {
-        await api.leaveChallenge(challenge._id);
-        setChallenges(prev => prev.map(c => c._id === challenge._id ? { ...c, joined: false, progress: 0 } : c));
+        await api.leaveChallenge(challengeId);
+        setChallenges(prev => prev.map(c => (
+          getChallengeId(c) === challengeId ? { ...c, joined: false, progress: 0 } : c
+        )));
         // Feedback (UX Rule 1)
         // Ideally show a toast, but Alert is invasive. Silent update + UI change is often enough if distinct.
       } else {
-        await api.joinChallenge(challenge._id);
-        setChallenges(prev => prev.map(c => c._id === challenge._id ? { ...c, joined: true, progress: 0 } : c));
-        Alert.alert("Joined!", `You have joined ${challenge.title}. Good luck!`);
+        await api.joinChallenge(challengeId);
+        setChallenges(prev => prev.map(c => (
+          getChallengeId(c) === challengeId ? { ...c, joined: true, progress: 0 } : c
+        )));
+        showAlert({
+          title: "Joined!",
+          message: `You have joined ${challenge.title}. Good luck!`,
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (err) {
-       Alert.alert("Error", "Could not update challenge status.");
+      showAlert({
+        title: "Error",
+        message: err.message || "Could not update challenge status.",
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setJoining(null);
     }
@@ -119,6 +140,7 @@ export default function CompeteScreen({ navigation }) {
   };
 
   const renderChallengeCard = (challenge, index) => {
+    const challengeId = getChallengeId(challenge);
     const timeInfo = getTimeRemaining(challenge.endDate);
     const isJoined = challenge.joined;
     const isCompleted = challenge.completed;
@@ -126,9 +148,9 @@ export default function CompeteScreen({ navigation }) {
     
     return (
       <TouchableOpacity
-        key={challenge._id || index}
+        key={challengeId || index}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('ChallengeDetail', { challengeId: challenge._id })}
+        onPress={() => navigation.navigate('ChallengeDetail', { challengeId })}
         style={[styles.challengeCard, { backgroundColor: theme.bgCard, borderColor: isJoined ? theme.primary : 'rgba(255,255,255,0.05)' }]}
       >
           {/* Header Row */}
@@ -201,9 +223,9 @@ export default function CompeteScreen({ navigation }) {
                     handleJoinLeave(challenge);
                 }
               }}
-              disabled={joining === challenge._id || timeInfo.expired}
+              disabled={joining === challengeId || timeInfo.expired}
             >
-              {joining === challenge._id ? (
+              {joining === challengeId ? (
                 <ActivityIndicator size="small" color={isJoined ? "#fff" : "#fff"} />
               ) : (
                 <Text style={[styles.joinBtnText, { color: '#fff' }]}>
@@ -273,6 +295,9 @@ export default function CompeteScreen({ navigation }) {
           )}
         </ScrollView>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

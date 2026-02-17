@@ -3,10 +3,19 @@ import { Dimensions, Platform } from 'react-native';
 const { width, height } = Dimensions.get('window');
 
 // Responsive scaling - base on iPhone 15 (393px width)
-const scale = (size) => (width / 393) * size;
+// Cap the base width at 480px to prevent huge text on desktop/web
+const BASE_WIDTH = 393;
+const MAX_SCALE_WIDTH = 480;
+const effectiveWidth = Math.min(width, MAX_SCALE_WIDTH);
+
+const scale = (size) => (effectiveWidth / BASE_WIDTH) * size;
 
 const moderateScale = (size) => {
   const scaled = scale(size);
+  // For desktop/wide screens, don't scale up beyond original size
+  if (width > MAX_SCALE_WIDTH) {
+    return size;
+  }
   return scaled > size ? size + (scaled - size) * 0.5 : scaled;
 };
 

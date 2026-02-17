@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Animated, Alert, Platform, ActionSheetIOS } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Animated, Platform, ActionSheetIOS } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,7 @@ import { useStreamlinedOnboarding } from '../../../context/StreamlinedOnboarding
 import OnboardingLayout from '../../../components/onboarding/OnboardingLayout';
 import { Spacing, BorderRadius, Typography } from '../../../constants/colors';
 import * as Haptics from 'expo-haptics';
+import CustomAlert, { useCustomAlert } from '../../../components/CustomAlert';
 
 const DEFAULT_AVATARS = [
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
@@ -25,6 +26,7 @@ const ProfileSetupScreen = () => {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { updateStepData, goToNextStep, goToPreviousStep, onboardingData, STEPS, canGoNext } = useStreamlinedOnboarding();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const [displayName, setDisplayName] = useState(onboardingData[STEPS.PROFILE]?.displayName || user?.username || '');
   const [profileImage, setProfileImage] = useState(onboardingData[STEPS.PROFILE]?.profileImage || null);
@@ -84,16 +86,16 @@ const ProfileSetupScreen = () => {
         }
       );
     } else {
-      Alert.alert(
-        'Profile Photo',
-        'Choose an option',
-        [
+      showAlert({
+        title: 'Profile Photo',
+        message: 'Choose an option',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Take Photo', onPress: handleTakePhoto },
           { text: 'Choose from Library', onPress: handleChooseFromLibrary },
           { text: 'Remove Photo', style: 'destructive', onPress: handleRemovePhoto },
         ]
-      );
+      });
     }
   };
 
@@ -101,7 +103,12 @@ const ProfileSetupScreen = () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera permission is required to take a photo');
+        showAlert({
+          title: 'Permission needed',
+          message: 'Camera permission is required to take a photo',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
@@ -120,7 +127,12 @@ const ProfileSetupScreen = () => {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to take photo',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -128,7 +140,12 @@ const ProfileSetupScreen = () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Photo library permission is required');
+        showAlert({
+          title: 'Permission needed',
+          message: 'Photo library permission is required',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
@@ -147,7 +164,12 @@ const ProfileSetupScreen = () => {
       }
     } catch (error) {
       console.error('Error choosing photo:', error);
-      Alert.alert('Error', 'Failed to choose photo');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to choose photo',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -163,7 +185,8 @@ const ProfileSetupScreen = () => {
   };
 
   return (
-    <OnboardingLayout
+    <>
+      <OnboardingLayout
       title="Set Up Your Profile"
       subtitle="How should we call you?"
       showProgress={true}
@@ -292,6 +315,8 @@ const ProfileSetupScreen = () => {
         )}
       </Animated.View>
     </OnboardingLayout>
+    <CustomAlert {...alertConfig} onClose={hideAlert} />
+  </>
   );
 };
 

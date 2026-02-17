@@ -7,23 +7,53 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "unyield",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#9b2c2c"
+        }
+      ]
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unyielding.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow access to your camera to record workout videos.",
+        "NSMicrophoneUsageDescription": "Allow access to your microphone to record audio with videos.",
+        "NSPhotoLibraryUsageDescription": "Allow access to your photo library to select workout videos.",
+        "NSPhotoLibraryAddUsageDescription": "Allow access to save workout videos to your photo library."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.unyielding.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a40f8673-cfa2-4c2c-8624-044b303ab2ef"
+      }
+    },
+    "owner": "diggawayne"
   }
 }

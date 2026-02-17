@@ -1,11 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import api from '../../services/api';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
+
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 export default function AppealsManagementScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appeals, setAppeals] = useState([]);
@@ -24,7 +39,12 @@ export default function AppealsManagementScreen({ navigation }) {
       }
     } catch (err) {
       console.error('Error loading appeals:', err);
-      Alert.alert('Error', 'Failed to load appeals');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to load appeals',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,10 +65,20 @@ export default function AppealsManagementScreen({ navigation }) {
         setAppeals(prev => prev.filter(a => a._id !== appeal._id));
         setShowReviewModal(false);
         setReviewNotes('');
-        Alert.alert('Success', `Appeal ${action}ed`);
+        showAlert({
+          title: 'Success',
+          message: `Appeal ${action}ed`,
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to review appeal');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to review appeal',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -59,13 +89,13 @@ export default function AppealsManagementScreen({ navigation }) {
           <Text style={styles.appealUserName}>{appeal.user?.name || 'Unknown'}</Text>
           <Text style={styles.appealUserHandle}>@{appeal.user?.username || 'unknown'}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: appeal.status === 'pending' ? '#ff9500' : appeal.status === 'approved' ? '#00d4aa' : '#ff3b30' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: appeal.status === 'pending' ? C.warning : appeal.status === 'approved' ? C.success : C.danger }]}>
           <Text style={styles.statusText}>{appeal.status}</Text>
         </View>
       </View>
       <View style={styles.appealDetails}>
         <View style={styles.appealVideoInfo}>
-          <Ionicons name="videocam" size={14} color="#888" />
+          <Ionicons name="videocam" size={14} color={C.textSubtle} />
           <Text style={styles.appealVideoText}>{appeal.videoSubmission?.exercise}</Text>
           <Text style={styles.appealVideoStats}>
             {appeal.videoSubmission?.reps} reps × {appeal.videoSubmission?.weight || 0}kg
@@ -81,7 +111,7 @@ export default function AppealsManagementScreen({ navigation }) {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={C.white} />
         </TouchableOpacity>
         <Text style={styles.pageTitle}>Appeals</Text>
         <View style={styles.headerRight} />
@@ -103,11 +133,11 @@ export default function AppealsManagementScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#ff003c" />
+          <ActivityIndicator size="large" color={C.accent} />
         </View>
       ) : appeals.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="checkmark-circle-outline" size={64} color="#00d4aa" />
+          <Ionicons name="checkmark-circle-outline" size={64} color={C.success} />
           <Text style={styles.emptyText}>No appeals found</Text>
         </View>
       ) : (
@@ -146,7 +176,7 @@ export default function AppealsManagementScreen({ navigation }) {
                 <TextInput
                   style={styles.notesInput}
                   placeholder="Review notes (optional)..."
-                  placeholderTextColor="#666"
+                  placeholderTextColor={C.textSubtle}
                   value={reviewNotes}
                   onChangeText={setReviewNotes}
                   multiline
@@ -154,11 +184,11 @@ export default function AppealsManagementScreen({ navigation }) {
                 />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.modalButton, styles.approveButton]} onPress={() => handleReview(selectedAppeal, 'approve')}>
-                    <Ionicons name="checkmark" size={20} color="#fff" />
+                    <Ionicons name="checkmark" size={18} color={C.white} />
                     <Text style={styles.modalButtonText}>Approve Appeal</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalButton, styles.denyButton]} onPress={() => handleReview(selectedAppeal, 'deny')}>
-                    <Ionicons name="close" size={20} color="#fff" />
+                    <Ionicons name="close" size={18} color={C.white} />
                     <Text style={styles.modalButtonText}>Deny Appeal</Text>
                   </TouchableOpacity>
                 </View>
@@ -170,55 +200,176 @@ export default function AppealsManagementScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  pageTitle: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1 },
-  headerRight: { width: 40 },
-  filterContainer: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#0f0f0f', borderRadius: 16 },
-  filterChipActive: { backgroundColor: '#ff003c' },
-  filterChipText: { fontSize: 12, color: '#888', fontWeight: '600' },
-  filterChipTextActive: { color: '#fff' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { marginTop: 16, fontSize: 16, color: '#888' },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16 },
-  appealCard: { backgroundColor: '#0f0f0f', borderRadius: 12, padding: 16, marginBottom: 12 },
-  appealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  container: ADMIN_SURFACES.page,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pageTitle: {
+    ...T.h2,
+    flex: 1,
+  },
+  headerRight: {
+    width: 34,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: S.xl,
+    marginTop: S.sm,
+    marginBottom: S.sm,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: C.card,
+    borderRadius: R.pill,
+    borderWidth: 1,
+    borderColor: C.border,
+    minHeight: 24,
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: C.accentSoft,
+    borderColor: C.accent,
+  },
+  filterChipText: {
+    fontSize: 11,
+    color: C.textSubtle,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: C.accent,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: S.xl,
+  },
+  emptyText: {
+    marginTop: S.md,
+    ...T.bodyMuted,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: S.xl,
+    paddingBottom: S.xxl,
+  },
+  appealCard: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
+  },
+  appealHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: S.sm,
+  },
   appealUserInfo: { flex: 1 },
-  appealUserName: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  appealUserHandle: { fontSize: 12, color: '#888' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 10, fontWeight: '700', color: '#fff', textTransform: 'uppercase' },
+  appealUserName: { fontSize: 14, fontWeight: '600', color: C.text },
+  appealUserHandle: { fontSize: 11, color: C.textSubtle },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.md },
+  statusText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: C.white,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   appealDetails: { marginBottom: 8 },
-  appealVideoInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  appealVideoText: { fontSize: 12, color: '#fff', fontWeight: '600' },
-  appealVideoStats: { fontSize: 11, color: '#888' },
-  appealReason: { fontSize: 13, color: '#ccc', lineHeight: 18, marginBottom: 8 },
-  appealDate: { fontSize: 11, color: '#666' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalContent: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 20, width: '100%', maxWidth: 400 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16 },
+  appealVideoInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  appealVideoText: { fontSize: 12, color: C.text, fontWeight: '600' },
+  appealVideoStats: { fontSize: 11, color: C.textSubtle },
+  appealReason: { fontSize: 13, color: C.text, lineHeight: 18, marginBottom: 8 },
+  appealDate: { fontSize: 10, color: C.textSubtle },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.lg,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalTitle: { ...T.h2, marginBottom: S.md },
   modalUserInfo: { marginBottom: 12 },
-  modalUserName: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  modalUserHandle: { fontSize: 12, color: '#888' },
-  modalVideoInfo: { backgroundColor: '#0f0f0f', borderRadius: 8, padding: 12, marginBottom: 12 },
-  modalVideoExercise: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  modalVideoStats: { fontSize: 12, color: '#888', marginTop: 4 },
-  modalReasonLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 4 },
-  modalReason: { fontSize: 13, color: '#ccc', marginBottom: 12, lineHeight: 18 },
-  notesInput: { backgroundColor: '#0f0f0f', borderRadius: 8, padding: 12, color: '#fff', borderWidth: 1, borderColor: '#333', marginBottom: 16, minHeight: 80, textAlignVertical: 'top' },
+  modalUserName: { fontSize: 15, fontWeight: '600', color: C.text },
+  modalUserHandle: { fontSize: 11, color: C.textSubtle },
+  modalVideoInfo: {
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.sm,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalVideoExercise: { fontSize: 13, fontWeight: '700', color: C.text },
+  modalVideoStats: { fontSize: 11, color: C.textSubtle, marginTop: 4 },
+  modalReasonLabel: { ...T.caption, marginBottom: 4 },
+  modalReason: { fontSize: 13, color: C.text, marginBottom: 12, lineHeight: 18 },
+  notesInput: {
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.md,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontSize: 13,
+  },
   modalActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  modalButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 8, gap: 8 },
-  approveButton: { backgroundColor: '#00d4aa' },
-  denyButton: { backgroundColor: '#ff3b30' },
-  modalButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: R.md,
+    gap: 6,
+  },
+  approveButton: { backgroundColor: C.success },
+  denyButton: { backgroundColor: C.danger },
+  modalButtonText: { fontSize: 12, fontWeight: '700', color: C.white },
   closeButton: { padding: 12, alignItems: 'center' },
-  closeButtonText: { fontSize: 14, color: '#888' },
+  closeButtonText: { fontSize: 12, color: C.textSubtle },
 });

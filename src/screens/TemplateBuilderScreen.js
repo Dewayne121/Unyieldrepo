@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,12 +16,14 @@ import { EXERCISES, EXERCISE_CATEGORIES } from '../constants/exercises';
 import { useTheme } from '../context/ThemeContext';
 import { SKINS } from '../constants/colors';
 import ScreenHeader from '../components/ScreenHeader';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 export default function TemplateBuilderScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { theme, skin } = useTheme();
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
   const { templates, createTemplate, updateTemplate } = useWorkout();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const templateId = route.params?.templateId;
   const isEditing = !!templateId;
@@ -70,10 +71,11 @@ export default function TemplateBuilderScreen({ navigation, route }) {
   };
 
   const handleRemoveExercise = (index) => {
-    Alert.alert(
-      'Remove Exercise',
-      'Remove this exercise from the template?',
-      [
+    showAlert({
+      title: 'Remove Exercise',
+      message: 'Remove this exercise from the template?',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
@@ -85,7 +87,7 @@ export default function TemplateBuilderScreen({ navigation, route }) {
           },
         },
       ]
-    );
+    });
   };
 
   const handleMoveExercise = (fromIndex, toIndex) => {
@@ -115,12 +117,22 @@ export default function TemplateBuilderScreen({ navigation, route }) {
 
   const handleSave = () => {
     if (!templateName.trim()) {
-      Alert.alert('Error', 'Please enter a template name');
+      showAlert({
+        title: 'Error',
+        message: 'Please enter a template name',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
     if (exercises.length === 0) {
-      Alert.alert('Error', 'Please add at least one exercise');
+      showAlert({
+        title: 'Error',
+        message: 'Please add at least one exercise',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
@@ -132,14 +144,20 @@ export default function TemplateBuilderScreen({ navigation, route }) {
 
     if (isEditing) {
       updateTemplate(templateId, templateData);
-      Alert.alert('Success', 'Template updated successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      showAlert({
+        title: 'Success',
+        message: 'Template updated successfully',
+        icon: 'success',
+        buttons: [{ text: 'OK', onPress: () => navigation.goBack() }]
+      });
     } else {
       createTemplate(templateData);
-      Alert.alert('Success', 'Template created successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      showAlert({
+        title: 'Success',
+        message: 'Template created successfully',
+        icon: 'success',
+        buttons: [{ text: 'OK', onPress: () => navigation.goBack() }]
+      });
     }
   };
 
@@ -350,6 +368,9 @@ export default function TemplateBuilderScreen({ navigation, route }) {
           theme={theme}
         />
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

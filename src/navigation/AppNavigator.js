@@ -28,6 +28,9 @@ import ChallengeDetailScreen from '../screens/ChallengeDetailScreen';
 import ChallengeSubmissionScreen from '../screens/ChallengeSubmissionScreen';
 import WorkoutSubmitScreen from '../screens/WorkoutSubmitScreen';
 import WorkoutSummaryScreen from '../screens/WorkoutSummaryScreen';
+import TrainingReportScreen from '../screens/TrainingReportScreen';
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 // Admin Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -39,6 +42,10 @@ import ReportsManagementScreen from '../screens/admin/ReportsManagementScreen';
 import AnalyticsScreen from '../screens/admin/AnalyticsScreen';
 import ChallengeManagementScreen from '../screens/admin/ChallengeManagementScreen';
 import ChallengeBuilderScreen from '../screens/admin/ChallengeBuilderScreen';
+import AdminSendNotificationScreen from '../screens/admin/AdminSendNotificationScreen';
+
+// Debug
+import DebugNotificationScreen from '../screens/DebugNotificationScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -56,7 +63,7 @@ function TabBar({ state, descriptors, navigation }) {
   // Tab configuration with icons and labels
   const tabs = {
     'Base': { icon: 'home-outline', label: 'Home' },
-    'Training': { icon: 'analytics-outline', label: 'Report' },
+    'Training': { icon: 'barbell-outline', label: 'Workout' },
     'Compete': { icon: 'trophy', label: 'Compete' },
     'Leagues': { icon: 'ribbon-outline', label: 'Ranks' },
     'Stats': { icon: 'person-outline', label: 'Profile' },
@@ -190,10 +197,27 @@ function RootNavigator() {
         component={WorkoutSummaryScreen}
         options={{ presentation: 'fullScreenModal' }}
       />
+      {/* Calendar Log - Full screen modal */}
+      <Stack.Screen
+        name="CalendarLog"
+        component={TrainingReportScreen}
+        options={{ presentation: 'fullScreenModal' }}
+      />
       {/* Profile screen for viewing own or other users' profiles */}
       <Stack.Screen
         name="Profile"
         component={ProfileScreen}
+      />
+      {/* Notification Settings */}
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ presentation: 'card' }}
       />
 
       {/* Challenge Routes */}
@@ -250,8 +274,23 @@ function RootNavigator() {
         options={{ presentation: 'card' }}
       />
       <Stack.Screen
+        name="AdminNotifications"
+        component={AdminSendNotificationScreen}
+        options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
+        name="AdminSendNotification"
+        component={AdminSendNotificationScreen}
+        options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
         name="AdminChallengeBuilder"
         component={ChallengeBuilderScreen}
+        options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
+        name="DebugNotifications"
+        component={DebugNotificationScreen}
         options={{ presentation: 'card' }}
       />
     </Stack.Navigator>

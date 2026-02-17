@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  Alert,
   Platform,
   ActionSheetIOS,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { SKINS } from '../../constants/colors';
 import { useOnboarding } from '../../context/OnboardingContext';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 
 const DEFAULT_AVATARS = [
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
@@ -31,6 +31,7 @@ export default function ProfileOnboardingScreen({ navigation }) {
   const { theme, skin } = useTheme();
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
   const { updateData, onboardingData, goToNextStep, goToPreviousStep } = useOnboarding();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const [displayName, setDisplayName] = useState(onboardingData.displayName || '');
   const [profileImage, setProfileImage] = useState(onboardingData.profileImage || null);
@@ -67,16 +68,16 @@ export default function ProfileOnboardingScreen({ navigation }) {
         }
       );
     } else {
-      Alert.alert(
-        'Profile Photo',
-        'Choose an option',
-        [
+      showAlert({
+        title: 'Profile Photo',
+        message: 'Choose an option',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Take Photo', onPress: handleTakePhoto },
           { text: 'Choose from Library', onPress: handleChooseFromLibrary },
           { text: 'Remove Photo', style: 'destructive', onPress: handleRemovePhoto },
         ]
-      );
+      });
     }
   };
 
@@ -84,7 +85,12 @@ export default function ProfileOnboardingScreen({ navigation }) {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera permission is required to take a photo');
+        showAlert({
+          title: 'Permission needed',
+          message: 'Camera permission is required to take a photo',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
@@ -105,7 +111,12 @@ export default function ProfileOnboardingScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to take photo',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -113,7 +124,12 @@ export default function ProfileOnboardingScreen({ navigation }) {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Photo library permission is required');
+        showAlert({
+          title: 'Permission needed',
+          message: 'Photo library permission is required',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
@@ -134,7 +150,12 @@ export default function ProfileOnboardingScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Error choosing photo:', error);
-      Alert.alert('Error', 'Failed to choose photo');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to choose photo',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -331,6 +352,9 @@ export default function ProfileOnboardingScreen({ navigation }) {
           />
         </TouchableOpacity>
       </View>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

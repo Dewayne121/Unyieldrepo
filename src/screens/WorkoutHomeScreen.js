@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,11 +14,13 @@ import { useTheme } from '../context/ThemeContext';
 import { SKINS } from '../constants/colors';
 import ScreenHeader from '../components/ScreenHeader';
 import QuickWorkoutModal from '../components/QuickWorkoutModal';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 export default function WorkoutHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { theme, skin } = useTheme();
   const { templates, completedSessions, activeSession, startSession, deleteTemplate, addExercisesToSession } = useWorkout();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
   const [refreshing, setRefreshing] = useState(false);
   const [showQuickWorkoutModal, setShowQuickWorkoutModal] = useState(false);
@@ -58,10 +59,11 @@ export default function WorkoutHomeScreen({ navigation }) {
   };
 
   const handleDeleteTemplate = (templateId) => {
-    Alert.alert(
-      'Delete Template',
-      'Are you sure you want to delete this workout template?',
-      [
+    showAlert({
+      title: 'Delete Template',
+      message: 'Are you sure you want to delete this workout template?',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -69,7 +71,7 @@ export default function WorkoutHomeScreen({ navigation }) {
           onPress: () => deleteTemplate(templateId),
         },
       ]
-    );
+    });
   };
 
   const onRefresh = async () => {
@@ -284,6 +286,9 @@ export default function WorkoutHomeScreen({ navigation }) {
         onClose={() => setShowQuickWorkoutModal(false)}
         onGenerate={handleGenerateWorkout}
       />
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

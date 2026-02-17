@@ -5,6 +5,7 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import { AppProvider } from './src/context/AppContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { WorkoutProvider } from './src/context/WorkoutContext';
+import NotificationBootstrap from './src/components/NotificationBootstrap';
 import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <AuthProvider>
           <AppProvider>
             <WorkoutProvider>
+              <NotificationBootstrap />
               <AppNavigator />
               <StatusBar style="light" />
             </WorkoutProvider>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Dimensions, Modal, ActivityIndicator, TextInput, Platform, ActionSheetIOS, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Modal, ActivityIndicator, TextInput, Platform, ActionSheetIOS, Image, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,10 +7,16 @@ import { Video } from 'expo-av';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useStreamlinedOnboarding } from '../context/StreamlinedOnboardingContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { getUserTier } from '../constants/tiers';
 import api from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
+import AccoladePickerModal from '../components/AccoladePickerModal';
+import AdminProfileEditModal from '../components/AdminProfileEditModal';
+import TutorialModal from '../components/TutorialModal';
 
 // Conditional import for expo-video-thumbnails (not available on web)
 let VideoThumbnails;
@@ -21,6 +27,11 @@ try {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Max content width for web/desktop to maintain mobile-like layout
+const MAX_CONTENT_WIDTH = 480;
+const CONTENT_WIDTH = Math.min(SCREEN_WIDTH, MAX_CONTENT_WIDTH);
+const IS_WIDE_SCREEN = SCREEN_WIDTH > MAX_CONTENT_WIDTH;
 
 const LS_WORKOUT_VIDEOS = 'unyield_workout_videos';
 
@@ -89,6 +100,7 @@ export default function ProfileScreen({ route, navigation }) {
   const { theme } = useTheme();
   const { user: currentUser, weightUnit, toggleWeightUnit, heightUnit, toggleHeightUnit } = useApp();
   const { signOut, deleteAccount, updateUserProfile, refreshUser } = useAuth();
+  const { showTutorial, setShowTutorial, tutorialTopic } = useStreamlinedOnboarding();
 
   // Profile state
   const [viewedUser, setViewedUser] = useState(null);
@@ -99,7 +111,6 @@ export default function ProfileScreen({ route, navigation }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const videoRef = useRef(null);
-  const lastRefreshRef = useRef(0);
   const thumbnailRequestsRef = useRef(new Set());
 
   // Edit Profile Modal state
@@ -126,27 +137,58 @@ export default function ProfileScreen({ route, navigation }) {
 
   // Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [inviteCodes, setInviteCodes] = useState([]);
+  const [inviteLimits, setInviteLimits] = useState({
+    maxInviteCodes: 3,
+    remainingInviteCodes: 3,
+    isUnlimitedInvites: false,
+  });
+  const [loadingInviteCodes, setLoadingInviteCodes] = useState(false);
+  const [generatingInviteCode, setGeneratingInviteCode] = useState(false);
 
-  const userId = route?.params?.userId;
+  // Change password modal state
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  // Profile picture upload state
+  const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
+
+  // Custom alert state
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+
+  // Admin state
+  const [showAccoladePicker, setShowAccoladePicker] = useState(false);
+  const [showAdminEditModal, setShowAdminEditModal] = useState(false);
+
+  const routeUserParam = route?.params?.userId ?? route?.params?.id ?? route?.params?.user;
+  const resolvedRouteUserId = typeof routeUserParam === 'string' || typeof routeUserParam === 'number'
+    ? String(routeUserParam)
+    : String(routeUserParam?.id ?? routeUserParam?._id ?? '');
+  const userId = resolvedRouteUserId || null;
   const currentUserId = currentUser?.id ?? currentUser?._id;
   const isViewingOtherUser = Boolean(userId && String(userId) !== String(currentUserId));
 
-  // Load user profile
+  // Admin detection
+  const isAdmin = currentUser?.accolades?.includes('admin');
+
+  // Load user profile - only on userId change, not on currentUser change
   useEffect(() => {
-    // If we're already viewing this user, don't reload unless it's a refresh
-    if (viewedUser && (viewedUser.id === userId || viewedUser._id === userId)) {
-      setLoadingProfile(false);
-      return;
-    }
-
-    // Immediate loading state to prevent flicker of old data
-    setLoadingProfile(true);
-    // Clear previous user immediately to avoid showing stale data
-    setViewedUser(null);
-
     const loadUserProfile = async () => {
       setIsOwnProfile(!isViewingOtherUser);
+
+      // Always fetch fresh data for own profile (no caching)
       if (isViewingOtherUser) {
+        // For other users, cache if already loaded
+        if (viewedUser && (viewedUser.id === userId || viewedUser._id === userId)) {
+          setLoadingProfile(false);
+          return;
+        }
+        setViewedUser(null);
         setLoadingProfile(true);
         try {
           const response = await api.getUserById(userId);
@@ -161,34 +203,46 @@ export default function ProfileScreen({ route, navigation }) {
           setLoadingProfile(false);
         }
       } else {
-        (async () => {
-          try {
-            const response = await api.getProfile();
-            if (response.success && response.data) {
-              setViewedUser(response.data);
-            } else {
-              setViewedUser(currentUser);
-            }
-          } catch (error) {
+        // For own profile, ALWAYS fetch fresh data from API
+        setLoadingProfile(true);
+        try {
+          const response = await api.getProfile();
+          if (response.success && response.data) {
+            setViewedUser(response.data);
+          } else {
             setViewedUser(currentUser);
           }
+        } catch (error) {
+          setViewedUser(currentUser);
+        } finally {
           setLoadingProfile(false);
-        })();
+        }
       }
     };
     loadUserProfile();
-  }, [isViewingOtherUser, userId, currentUser]);
+    // Only depend on userId and isViewingOtherUser, NOT currentUser
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isViewingOtherUser, userId]);
 
+  // Refresh when screen gains focus (for own profile)
   useFocusEffect(
     useCallback(() => {
-      const now = Date.now();
-      const timeSinceLastRefresh = now - lastRefreshRef.current;
-      const isFirstMount = lastRefreshRef.current === 0;
-      if (isOwnProfile && refreshUser && (isFirstMount || timeSinceLastRefresh > 30000)) {
-        lastRefreshRef.current = now;
-        refreshUser().catch(() => {});
-      }
-    }, [isOwnProfile, refreshUser])
+      const refreshOnFocus = async () => {
+        if (!isViewingOtherUser && refreshUser) {
+          const refreshedUser = await refreshUser();
+          if (refreshedUser) {
+            setViewedUser(refreshedUser);
+          }
+        } else if (userId) {
+          // For other users, reload their profile data
+          const response = await api.getUserById(userId);
+          if (response.success && response.data) {
+            setViewedUser(response.data);
+          }
+        }
+      };
+      refreshOnFocus().catch(() => {});
+    }, [isViewingOtherUser, refreshUser, userId])
   );
 
   const loadWorkoutVideos = useCallback(async () => {
@@ -202,9 +256,11 @@ export default function ProfileScreen({ route, navigation }) {
         } catch (e) {}
 
         if (videoResponse.success && videoResponse.data) {
-          allVideos.push(...videoResponse.data.map(v => ({
-            id: v._id,
-            serverId: v._id,
+          allVideos.push(...videoResponse.data.map(v => {
+            const videoId = v.id || v._id || v.serverId || v.videoUrl || v.videoUri;
+            return ({
+            id: videoId,
+            serverId: v.id || v._id || v.serverId,
             uri: v.videoUrl,
             exercise: v.exercise,
             reps: v.reps,
@@ -216,13 +272,16 @@ export default function ProfileScreen({ route, navigation }) {
             approved: v.status === 'approved',
             rejectionReason: v.rejectionReason,
             type: 'workout',
-          })));
+            });
+          }));
         }
 
         if (challengeResponse.success && challengeResponse.data) {
-          allVideos.push(...challengeResponse.data.map(v => ({
-            id: v._id,
-            serverId: v._id,
+          allVideos.push(...challengeResponse.data.map(v => {
+            const videoId = v.id || v._id || v.serverId || v.videoUrl || v.videoUri;
+            return ({
+            id: videoId,
+            serverId: v.id || v._id || v.serverId,
             uri: v.videoUrl,
             exercise: v.exercise,
             reps: v.reps,
@@ -235,22 +294,30 @@ export default function ProfileScreen({ route, navigation }) {
             rejectionReason: v.rejectionReason,
             type: 'challenge',
             challengeTitle: v.challenge?.title,
-          })));
+            });
+          }));
         }
 
         allVideos.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         if (allVideos.length === 0) {
           const localVideos = await getWorkoutVideos();
-          allVideos = localVideos.map(v => ({ ...v, status: v.status || 'pending', type: 'workout' }));
+          allVideos = localVideos.map(v => ({
+            ...v,
+            id: v.id || v._id || v.serverId || v.uri,
+            status: v.status || 'pending',
+            type: 'workout',
+          }));
         }
         setWorkoutVideos(allVideos);
       } else if (userId) {
         const response = await api.getUserVideos(userId);
         if (response.success && response.data) {
-          setWorkoutVideos(response.data.map(v => ({
-            id: v._id,
-            serverId: v._id,
+          setWorkoutVideos(response.data.map(v => {
+            const videoId = v.id || v._id || v.serverId || v.videoUrl || v.videoUri;
+            return ({
+            id: videoId,
+            serverId: v.id || v._id || v.serverId,
             uri: v.videoUrl,
             exercise: v.exercise,
             reps: v.reps,
@@ -260,7 +327,8 @@ export default function ProfileScreen({ route, navigation }) {
             status: v.status,
             approved: v.status === 'approved',
             type: v.type,
-          })));
+            });
+          }));
         } else {
           setWorkoutVideos([]);
         }
@@ -311,6 +379,33 @@ export default function ProfileScreen({ route, navigation }) {
     return () => { isCancelled = true; };
   }, [workoutVideos, videoThumbnails]);
 
+  const loadInviteCodes = useCallback(async () => {
+    if (isViewingOtherUser) return;
+
+    setLoadingInviteCodes(true);
+    try {
+      const response = await api.getMyInviteCodes();
+      if (response.success && response.data) {
+        setInviteCodes(response.data.inviteCodes || []);
+        setInviteLimits({
+          maxInviteCodes: response.data.maxInviteCodes ?? 3,
+          remainingInviteCodes: response.data.remainingInviteCodes ?? 0,
+          isUnlimitedInvites: response.data.isUnlimitedInvites === true,
+        });
+      }
+    } catch (error) {
+      // Ignore network errors for passive invite-code refreshes.
+    } finally {
+      setLoadingInviteCodes(false);
+    }
+  }, [isViewingOtherUser]);
+
+  useEffect(() => {
+    if (showSettingsModal && !isViewingOtherUser) {
+      loadInviteCodes().catch(() => {});
+    }
+  }, [showSettingsModal, isViewingOtherUser, loadInviteCodes]);
+
   const handleBack = () => {
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Home');
@@ -351,7 +446,25 @@ export default function ProfileScreen({ route, navigation }) {
   };
 
   const handleSaveProfile = async () => {
-    if (!editName.trim()) return Alert.alert('Error', 'Display name required.');
+    if (!editName.trim()) {
+      return showAlert({
+        title: 'Error',
+        message: 'Display name is required.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+
+    // NEW: Weight is now mandatory for competition
+    if (!editWeight || !parseFloat(editWeight) || parseFloat(editWeight) <= 0) {
+      return showAlert({
+        title: 'Weight Required',
+        message: 'Weight is required for competition features and leaderboard ranking. Please enter your weight.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+
     setSavingProfile(true);
     try {
       const updates = {
@@ -368,12 +481,11 @@ export default function ProfileScreen({ route, navigation }) {
         updates.profileImage = editProfileImage;
       }
 
-      if (editWeight) {
-        let w = parseFloat(editWeight);
-        if (!isNaN(w)) {
-          if (weightUnit === 'lbs') w = w / 2.20462;
-          updates.weight = Math.round(w * 10) / 10;
-        }
+      // Weight is mandatory - always include
+      let w = parseFloat(editWeight);
+      if (!isNaN(w) && w > 0) {
+        if (weightUnit === 'lbs') w = w / 2.20462;
+        updates.weight = Math.round(w * 10) / 10;
       }
 
       if (editHeight) {
@@ -394,12 +506,27 @@ export default function ProfileScreen({ route, navigation }) {
         setViewedUser(result.data);
         setRefreshKey(prev => prev + 1);
         setShowEditProfileModal(false);
-        Alert.alert('Success', 'Profile updated');
+        showAlert({
+          title: 'Success',
+          message: 'Profile updated successfully.',
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       } else {
-        Alert.alert('Error', 'Update failed');
+        showAlert({
+          title: 'Error',
+          message: 'Failed to update profile. Please try again.',
+          icon: 'error',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (e) {
-      Alert.alert('Error', 'Update failed');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to update profile. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setSavingProfile(false);
     }
@@ -408,7 +535,14 @@ export default function ProfileScreen({ route, navigation }) {
   const handlePickImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') return Alert.alert('Permission needed', 'Allow camera access');
+      if (status !== 'granted') {
+        return showAlert({
+          title: 'Permission Needed',
+          message: 'Please allow photo library access to select an image.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -420,7 +554,146 @@ export default function ProfileScreen({ route, navigation }) {
         setEditProfileImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
       }
     } catch (e) {
-      Alert.alert('Error', 'Failed to pick image');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to pick image. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+  };
+
+  const handleChangeProfilePicture = async () => {
+    // Show action sheet for camera vs gallery
+    const options = ['Take Photo', 'Choose from Library', 'Cancel'];
+    const cancelButtonIndex = 2;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            await handleTakePhoto();
+          } else if (buttonIndex === 1) {
+            await handleChooseFromLibrary();
+          }
+        }
+      );
+    } else {
+      // For Android, use custom alert with two main options
+      showAlert({
+        title: 'Change Profile Picture',
+        message: 'Choose how to add your photo',
+        buttons: [
+          { text: 'Camera', style: 'default', onPress: handleTakePhoto },
+          { text: 'Gallery', style: 'default', onPress: handleChooseFromLibrary },
+        ]
+      });
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please grant camera permission to take a photo.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]?.base64) {
+        await uploadProfilePicture(result.assets[0].base64);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      showAlert({
+        title: 'Error',
+        message: 'Failed to take photo. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+  };
+
+  const handleChooseFromLibrary = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please grant photo library permission to select a photo.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]?.base64) {
+        await uploadProfilePicture(result.assets[0].base64);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showAlert({
+        title: 'Error',
+        message: 'Failed to select image. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+  };
+
+  const uploadProfilePicture = async (base64) => {
+    setUploadingProfilePicture(true);
+    try {
+      const base64Image = `data:image/jpeg;base64,${base64}`;
+      const updateResult = await updateUserProfile({ profileImage: base64Image });
+
+      if (updateResult.success) {
+        setViewedUser(updateResult.data);
+        // Also refresh the auth context to update the global user state
+        await refreshUser();
+        showAlert({
+          title: 'Success',
+          message: 'Profile picture updated successfully.',
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+      } else {
+        throw new Error(updateResult.error || 'Failed to update profile picture');
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      showAlert({
+        title: 'Upload Failed',
+        message: error.message || 'Failed to update profile picture. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    } finally {
+      setUploadingProfilePicture(false);
     }
   };
 
@@ -433,60 +706,220 @@ export default function ProfileScreen({ route, navigation }) {
   const handleSaveInlineBio = async () => { /* logic */ setEditingBioInline(false); };
 
   const handleDeleteVideo = (video) => {
-    Alert.alert('Delete', 'Delete this video?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try {
-          await deleteWorkoutVideo(video.id, video.serverId, video.type);
-          setRefreshKey(prev => prev + 1);
-        } catch (e) {}
-      }}
-    ]);
+    showAlert({
+      title: 'Delete Video',
+      message: 'Are you sure you want to delete this video? This action cannot be undone.',
+      icon: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteWorkoutVideo(video.id, video.serverId, video.type);
+            setRefreshKey(prev => prev + 1);
+          } catch (e) {
+            showAlert({
+              title: 'Error',
+              message: 'Failed to delete video. Please try again.',
+              icon: 'error',
+              buttons: [{ text: 'OK', style: 'default' }]
+            });
+          }
+        }}
+      ]
+    });
   };
 
   const handleClearLocalVideos = async () => {
-    Alert.alert('Clear Videos', 'This removes local video cache.', [
-        { text: 'Cancel' },
+    showAlert({
+      title: 'Clear Cache',
+      message: 'This will remove locally cached video data. Your uploaded videos will remain on the server.',
+      icon: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
         { text: 'Clear', style: 'destructive', onPress: async () => {
             await clearAllLocalVideos();
             setRefreshKey(prev => prev + 1);
         }}
-    ]);
+      ]
+    });
+  };
+
+  const handleShareInviteCode = async (code) => {
+    // Small delay to prevent touch events from propagating through on Android
+    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      await Share.share({
+        message: `Join me on UNYIELD. Use this invite code: ${code}`,
+      });
+    } catch (error) {
+      showAlert({
+        title: 'Error',
+        message: 'Could not open sharing options right now.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    }
+  };
+
+  const handleGenerateInviteCode = async () => {
+    if (
+      generatingInviteCode ||
+      (!inviteLimits.isUnlimitedInvites && inviteLimits.remainingInviteCodes <= 0)
+    ) {
+      return;
+    }
+
+    setGeneratingInviteCode(true);
+    try {
+      const response = await api.generateInviteCode();
+      if (response.success && response.data?.inviteCode?.code) {
+        const code = response.data.inviteCode.code;
+        await loadInviteCodes();
+        showAlert({
+          title: 'Invite Code Ready',
+          message: `Share this code: ${code}`,
+          icon: 'success',
+          buttons: [
+            { text: 'Share', style: 'default', onPress: () => handleShareInviteCode(code) },
+            { text: 'Done', style: 'default' },
+          ],
+        });
+        return;
+      }
+
+      throw new Error('Failed to generate invite code');
+    } catch (error) {
+      showAlert({
+        title: 'Invite Code Error',
+        message: error.message || 'Could not generate invite code.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    } finally {
+      setGeneratingInviteCode(false);
+    }
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert('Delete Account', 'This is permanent.', [
-        { text: 'Cancel' },
+    showAlert({
+      title: 'Delete Account',
+      message: 'This action is permanent and cannot be undone. All your data will be lost.',
+      icon: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: async () => {
             await deleteAccount();
         }}
-    ]);
+      ]
+    });
   };
 
+  // State for goal/region selection modals
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
+
   const handleQuickChangeGoal = () => {
-    Alert.alert('Select Goal', '', GOALS.map(g => ({
-        text: g,
-        onPress: async () => {
-            const res = await updateUserProfile({ goal: g });
-            if(res.success) {
-                setViewedUser(prev => ({ ...prev, goal: g }));
-                setRefreshKey(prev => prev + 1);
-            }
-        }
-    })));
+    setShowGoalModal(true);
+  };
+
+  const handleSelectGoal = async (goal) => {
+    setShowGoalModal(false);
+    const res = await updateUserProfile({ goal });
+    if(res.success) {
+      setViewedUser(prev => ({ ...prev, goal }));
+      setRefreshKey(prev => prev + 1);
+    }
   };
 
   const handleQuickChangeRegion = () => {
-    Alert.alert('Select Region', '', REGIONS.map(r => ({
-        text: r,
-        onPress: async () => {
-            const res = await updateUserProfile({ region: r });
-            if(res.success) {
-                setViewedUser(prev => ({ ...prev, region: r }));
-                setRefreshKey(prev => prev + 1);
-            }
-        }
-    })));
+    setShowRegionModal(true);
+  };
+
+  const handleSelectRegion = async (region) => {
+    setShowRegionModal(false);
+    const res = await updateUserProfile({ region });
+    if(res.success) {
+      setViewedUser(prev => ({ ...prev, region }));
+      setRefreshKey(prev => prev + 1);
+    }
+  };
+
+  // Admin handlers
+  const handleManageAccolades = () => {
+    setShowAccoladePicker(true);
+  };
+
+  const handleAdminEditProfile = () => {
+    setShowAdminEditModal(true);
+  };
+
+  const handleUserUpdated = (updatedUser) => {
+    setViewedUser(prev => ({ ...prev, ...updatedUser }));
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleChangePassword = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setShowPasswords(false);
+    setShowChangePasswordModal(true);
+    setShowSettingsModal(false);
+  };
+
+  const handleClosePasswordModal = () => {
+    setShowChangePasswordModal(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+  };
+
+  const handleSavePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError('New password must be different from current password');
+      return;
+    }
+
+    setChangingPassword(true);
+    setPasswordError('');
+
+    try {
+      const response = await api.changePassword(currentPassword, newPassword);
+
+      if (response.success) {
+        setShowChangePasswordModal(false);
+        showAlert({
+          title: 'Success',
+          message: 'Password changed successfully.',
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error) {
+      setPasswordError(error.message || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   if (loadingProfile || !viewedUser) {
@@ -506,9 +939,18 @@ export default function ProfileScreen({ route, navigation }) {
 
   const formatPoints = (p) => p >= 1000 ? (p / 1000).toFixed(1) + 'k' : p.toString();
 
-  // Accolades
-  const hasAdmin = viewedUser?.accolades?.includes('admin');
-  const hasCommunity = viewedUser?.accolades?.includes('community_support');
+  // Accolades display
+  const userAccolades = viewedUser?.accolades || [];
+
+  const accoladeConfig = {
+    admin: { label: 'ADMIN', color: '#9b2c2c', icon: 'shield' },
+    community_support: { label: 'SUPPORT', color: '#3B82F6', icon: 'people' },
+    beta: { label: 'BETA TESTER', color: '#8B5CF6', icon: 'flask' },
+    staff: { label: 'STAFF', color: '#10B981', icon: 'construct' },
+    verified_athlete: { label: 'VERIFIED ATHLETE', color: '#F59E0B', icon: 'checkmark-circle' },
+    founding_member: { label: 'FOUNDER', color: '#D4AF37', icon: 'star' }, // Gold instead of pink
+    challenge_master: { label: 'CHALLENGE MASTER', color: '#6366F1', icon: 'trophy' },
+  };
 
   return (
     <View style={styles.container}>
@@ -517,16 +959,36 @@ export default function ProfileScreen({ route, navigation }) {
         subtitle={isOwnProfile ? "PERSONNEL FILE" : "DOSSIER"}
         showBackButton={true}
         onBackPress={handleBack}
-        rightAction={isOwnProfile ? (
+        rightAction={!isOwnProfile && isAdmin ? (
+          <View style={styles.adminActions}>
+            <TouchableOpacity
+              onPress={handleAdminEditProfile}
+              style={styles.adminActionBtn}
+            >
+              <Ionicons name="create-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleManageAccolades}
+              style={styles.adminActionBtn}
+            >
+              <Ionicons name="shield-checkmark" size={20} color="#9b2c2c" />
+            </TouchableOpacity>
+          </View>
+        ) : isOwnProfile ? (
           <TouchableOpacity onPress={() => setShowSettingsModal(true)} style={styles.iconBtn}>
             <Ionicons name="settings-sharp" size={20} color="#fff" />
           </TouchableOpacity>
         ) : null}
       />
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.profileHero}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={isOwnProfile ? handleChangeProfilePicture : undefined}
+            activeOpacity={isOwnProfile ? 0.7 : 1}
+            disabled={!isOwnProfile}
+          >
             {viewedUser?.profileImage ? (
               <Image source={{ uri: viewedUser.profileImage }} style={styles.avatar} />
             ) : (
@@ -534,13 +996,41 @@ export default function ProfileScreen({ route, navigation }) {
                 <Text style={styles.avatarInitials}>{displayName.substring(0, 2).toUpperCase()}</Text>
               </View>
             )}
-            <View style={styles.rankBadge}>
-               <Text style={styles.rankBadgeText}>{viewedUser?.fitnessLevel === 'elite' ? 'ELITE' : 'OPr'}</Text>
-            </View>
-          </View>
+            {(() => {
+              const tier = getUserTier(viewedUser?.totalPoints || 0);
+              return (
+                <Image
+                  source={tier.image}
+                  style={styles.tierBadgeImage}
+                  resizeMode="contain"
+                />
+              );
+            })()}
+            {isOwnProfile && (
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={12} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
 
           <Text style={styles.userName}>{displayName}</Text>
           <Text style={styles.userHandle}>{handle}</Text>
+
+          {/* Accolades */}
+          {userAccolades.length > 0 && (
+            <View style={styles.accoladesContainer}>
+              {userAccolades.map(accolade => {
+                const config = accoladeConfig[accolade];
+                if (!config) return null;
+                return (
+                  <View key={accolade} style={[styles.accoladeBadge, { backgroundColor: config.color }]}>
+                    <Ionicons name={config.icon} size={10} color="#fff" />
+                    <Text style={styles.accoladeText}>{config.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* Inline Bio */}
           <View style={styles.bioSection}>
@@ -574,20 +1064,67 @@ export default function ProfileScreen({ route, navigation }) {
 
         {/* Info Grid - Interactive */}
         <View style={styles.infoGrid}>
-           <TouchableOpacity style={styles.infoCard} onPress={isOwnProfile ? handleQuickChangeRegion : null} activeOpacity={isOwnProfile ? 0.7 : 1}>
-              <Text style={styles.infoLabel}>REGION</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <Text style={styles.infoValue}>{viewedUser?.region || 'Unknown'}</Text>
-                {isOwnProfile && <Ionicons name="create-outline" size={12} color="#666" style={{marginLeft: 4}} />}
+           <TouchableOpacity 
+             style={styles.infoCard} 
+             onPress={isOwnProfile ? handleQuickChangeRegion : null} 
+             activeOpacity={isOwnProfile ? 0.7 : 1}
+           >
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="location-sharp" size={16} color={theme.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>REGION</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{viewedUser?.region || 'Unknown'}</Text>
               </View>
            </TouchableOpacity>
-           <TouchableOpacity style={styles.infoCard} onPress={isOwnProfile ? handleQuickChangeGoal : null} activeOpacity={isOwnProfile ? 0.7 : 1}>
-              <Text style={styles.infoLabel}>OBJECTIVE</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <Text style={styles.infoValue}>{viewedUser?.goal || 'Classified'}</Text>
-                {isOwnProfile && <Ionicons name="create-outline" size={12} color="#666" style={{marginLeft: 4}} />}
+
+           <TouchableOpacity
+             style={styles.infoCard}
+             onPress={isOwnProfile ? handleQuickChangeGoal : null}
+             activeOpacity={isOwnProfile ? 0.7 : 1}
+           >
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="flag-outline" size={16} color={theme.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>OBJECTIVE</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{viewedUser?.goal || 'Classified'}</Text>
               </View>
            </TouchableOpacity>
+
+           <View style={styles.infoCard}>
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="fitness-outline" size={16} color={theme.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>WEIGHT</Text>
+                <Text style={styles.infoValue}>
+                  {viewedUser?.weight
+                    ? (weightUnit === 'lbs'
+                        ? `${Math.round(viewedUser.weight * 2.20462)} lbs`
+                        : `${viewedUser.weight} kg`)
+                    : '--'
+                  }
+                </Text>
+              </View>
+           </View>
+
+           <View style={styles.infoCard}>
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="resize-outline" size={16} color={theme.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>HEIGHT</Text>
+                <Text style={styles.infoValue}>
+                  {viewedUser?.height
+                    ? (heightUnit === 'ft'
+                        ? `${(viewedUser.height * 0.0328084).toFixed(1)} ft`
+                        : `${viewedUser.height} cm`)
+                    : '--'
+                  }
+                </Text>
+              </View>
+           </View>
         </View>
 
         {/* Workout Videos Section */}
@@ -601,9 +1138,10 @@ export default function ProfileScreen({ route, navigation }) {
             <View style={styles.videosGrid}>
               {workoutVideos.map((video, index) => {
                 const thumbnailUri = video.thumbnailUrl || videoThumbnails[video.id];
+                const videoKey = video.id || video.serverId || video.uri || `video-${index}`;
                 return (
                   <TouchableOpacity
-                    key={video.id}
+                    key={videoKey}
                     style={styles.videoCard}
                     onPress={() => setSelectedVideo(video)}
                     activeOpacity={0.8}
@@ -627,6 +1165,19 @@ export default function ProfileScreen({ route, navigation }) {
                             )}
                          </View>
                       </View>
+                      {/* Delete button - only on own profile */}
+                      {isOwnProfile && (
+                        <TouchableOpacity
+                          style={styles.videoDeleteButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteVideo(video);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#ff003c" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <Text style={styles.videoExercise} numberOfLines={1}>{video.exercise}</Text>
                     <Text style={styles.videoMeta}>{video.reps}x • +{video.points} XP</Text>
@@ -643,48 +1194,179 @@ export default function ProfileScreen({ route, navigation }) {
       {/* Settings Modal */}
       <Modal visible={showSettingsModal} transparent animationType="fade" onRequestClose={() => setShowSettingsModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSettingsModal(false)}>
-          <View style={styles.settingsSheet}>
+          <TouchableOpacity style={styles.settingsSheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.settingsHandle} />
             <Text style={styles.settingsTitle}>SETTINGS</Text>
-            
-            {(hasAdmin || hasCommunity) && (
-                <TouchableOpacity style={styles.settingItem} onPress={() => { setShowSettingsModal(false); navigation.navigate('AdminDashboard'); }}>
-                    <Ionicons name="shield-checkmark" size={20} color={theme.primary} />
-                    <Text style={[styles.settingText, { color: theme.primary }]}>Admin Panel</Text>
-                </TouchableOpacity>
-            )}
 
-            <TouchableOpacity style={styles.settingItem} onPress={handleEditProfile}>
-               <Ionicons name="person" size={20} color="#fff" />
-               <Text style={styles.settingText}>Edit Profile</Text>
-            </TouchableOpacity>
+            <ScrollView style={styles.settingsScroll} showsVerticalScrollIndicator={false}>
+              {(userAccolades.includes('admin') || userAccolades.includes('community_support')) && (
+                  <TouchableOpacity style={styles.settingItem} onPress={() => { setShowSettingsModal(false); navigation.navigate('AdminDashboard'); }}>
+                      <Ionicons name="shield-checkmark" size={20} color={theme.primary} />
+                      <Text style={[styles.settingText, { color: theme.primary }]}>Admin Panel</Text>
+                  </TouchableOpacity>
+              )}
 
-            <TouchableOpacity style={styles.settingItem} onPress={toggleWeightUnit}>
-               <Ionicons name="scale" size={20} color="#fff" />
-               <Text style={styles.settingText}>Unit: {weightUnit.toUpperCase()}</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.settingItem} onPress={handleEditProfile}>
+                 <Ionicons name="person" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Edit Profile</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem} onPress={handleClearLocalVideos}>
-               <Ionicons name="trash-bin-outline" size={20} color="#fff" />
-               <Text style={styles.settingText}>Clear Cache</Text>
-            </TouchableOpacity>
+              {isOwnProfile && (
+                <>
+                  <TouchableOpacity
+                    style={styles.settingItem}
+                    onPress={handleGenerateInviteCode}
+                    disabled={
+                      generatingInviteCode ||
+                      (!inviteLimits.isUnlimitedInvites && inviteLimits.remainingInviteCodes <= 0)
+                    }
+                  >
+                    <Ionicons
+                      name="ticket-outline"
+                      size={20}
+                      color={
+                        inviteLimits.isUnlimitedInvites || inviteLimits.remainingInviteCodes > 0
+                          ? '#fff'
+                          : '#666'
+                      }
+                    />
+                    <View style={styles.settingTextWrap}>
+                      <Text
+                        style={[
+                          styles.settingText,
+                          !inviteLimits.isUnlimitedInvites &&
+                          inviteLimits.remainingInviteCodes <= 0 &&
+                          { color: '#666' },
+                        ]}
+                      >
+                        Generate Invite Code
+                      </Text>
+                      <Text style={styles.settingSubText}>
+                        {inviteLimits.isUnlimitedInvites
+                          ? 'Unlimited invites (Admin)'
+                          : `${inviteLimits.remainingInviteCodes} of ${inviteLimits.maxInviteCodes} invites remaining`}
+                      </Text>
+                    </View>
+                    {generatingInviteCode ? (
+                      <ActivityIndicator color={theme.primary} />
+                    ) : (
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={20}
+                        color={
+                          inviteLimits.isUnlimitedInvites || inviteLimits.remainingInviteCodes > 0
+                            ? theme.primary
+                            : '#666'
+                        }
+                      />
+                    )}
+                  </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingItem} onPress={signOut}>
-               <Ionicons name="log-out" size={20} color="#ff003c" />
-               <Text style={[styles.settingText, { color: '#ff003c' }]}>Sign Out</Text>
-            </TouchableOpacity>
+                  <View style={styles.inviteCodesList}>
+                    {loadingInviteCodes ? (
+                      <ActivityIndicator color={theme.primary} />
+                    ) : inviteCodes.length > 0 ? (
+                      inviteCodes.map((invite) => (
+                        <View key={invite.id} style={styles.inviteCodeRow}>
+                          <View style={styles.inviteCodeMain}>
+                            <Text style={styles.inviteCodeText}>{invite.code}</Text>
+                            <Text style={[styles.inviteCodeStatus, invite.isUsed && styles.inviteCodeStatusUsed]}>
+                              {invite.isUsed ? 'USED' : 'READY'}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleShareInviteCode(invite.code)}
+                            disabled={invite.isUsed}
+                            style={styles.inviteShareButton}
+                          >
+                            <Ionicons
+                              name="share-social-outline"
+                              size={16}
+                              color={invite.isUsed ? '#555' : '#fff'}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.inviteEmptyText}>No invite codes generated yet.</Text>
+                    )}
+                  </View>
+                </>
+              )}
 
-            <TouchableOpacity style={[styles.settingItem, { borderBottomWidth: 0 }]} onPress={handleDeleteAccount}>
-               <Ionicons name="close-circle-outline" size={20} color="#666" />
-               <Text style={[styles.settingText, { color: '#666', fontSize: 14 }]}>Delete Account</Text>
-            </TouchableOpacity>
-          </View>
+              {viewedUser?.provider === 'email' && (
+              <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
+                 <Ionicons name="lock-closed" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Change Password</Text>
+              </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.settingItem} onPress={toggleWeightUnit}>
+                 <Ionicons name="scale" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Unit: {weightUnit.toUpperCase()}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.settingItem}
+                onPress={() => {
+                  setShowSettingsModal(false);
+                  navigation.navigate('Notifications');
+                }}
+              >
+                 <Ionicons name="notifications-outline" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Notification Center</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.settingItem}
+                onPress={() => {
+                  setShowSettingsModal(false);
+                  navigation.navigate('NotificationSettings');
+                }}
+              >
+                 <Ionicons name="notifications" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Notification Settings</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.settingItem}
+                onPress={() => {
+                  setShowSettingsModal(false);
+                  setShowTutorial(true);
+                }}
+              >
+                 <Ionicons name="help-circle" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Tutorial</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.settingItem} onPress={handleClearLocalVideos}>
+                 <Ionicons name="trash-bin-outline" size={20} color="#fff" />
+                 <Text style={styles.settingText}>Clear Cache</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.settingItem} onPress={() => navigation.navigate('DebugNotifications')}>
+                 <Ionicons name="notifications" size={20} color="#9b2c2c" />
+                 <Text style={[styles.settingText, { color: '#9b2c2c' }]}>Debug Notifications</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.settingItem} onPress={signOut}>
+                 <Ionicons name="log-out" size={20} color="#ff003c" />
+                 <Text style={[styles.settingText, { color: '#ff003c' }]}>Sign Out</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.settingItem, { borderBottomWidth: 0 }]} onPress={handleDeleteAccount}>
+                 <Ionicons name="close-circle-outline" size={20} color="#666" />
+                 <Text style={[styles.settingText, { color: '#666', fontSize: 14 }]}>Delete Account</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
       {/* Edit Profile Modal (Restored) */}
       <Modal visible={showEditProfileModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleCloseEditModal}>
         <View style={styles.editModalContainer}>
+          <View style={styles.editModalContent}>
             <View style={styles.editModalHeader}>
                 <TouchableOpacity onPress={handleCloseEditModal}>
                     <Text style={styles.editModalCancelText}>Cancel</Text>
@@ -721,6 +1403,7 @@ export default function ProfileScreen({ route, navigation }) {
                     </View>
                 </View>
             </ScrollView>
+          </View>
         </View>
       </Modal>
 
@@ -741,6 +1424,201 @@ export default function ProfileScreen({ route, navigation }) {
           )}
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleClosePasswordModal}
+      >
+        <View style={styles.editModalContainer}>
+          <View style={styles.editModalContent}>
+            <View style={styles.editModalHeader}>
+            <TouchableOpacity onPress={handleClosePasswordModal}>
+              <Text style={styles.editModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.editModalTitle}>Change Password</Text>
+            <TouchableOpacity onPress={handleSavePassword} disabled={changingPassword}>
+              {changingPassword ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : (
+                <Text style={styles.editModalSaveText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.editModalScroll}>
+            <View style={styles.formCard}>
+              <Text style={styles.cardLabel}>SECURITY</Text>
+
+              {passwordError ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color="#ff003c" />
+                  <Text style={styles.errorText}>{passwordError}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.modernInput}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="Enter current password"
+                    placeholderTextColor="#555"
+                    secureTextEntry={!showPasswords}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPasswords(!showPasswords)}
+                  >
+                    <Ionicons
+                      name={showPasswords ? "eye-off" : "eye"}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.modernInput}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password (min 6 characters)"
+                    placeholderTextColor="#555"
+                    secureTextEntry={!showPasswords}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.modernInput}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Re-enter new password"
+                    placeholderTextColor="#555"
+                    secureTextEntry={!showPasswords}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={16} color="#666" />
+                <Text style={styles.infoText}>
+                  Password must be at least 6 characters long
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Picture Upload Loading Overlay */}
+      {uploadingProfilePicture && (
+        <Modal visible={uploadingProfilePicture} transparent animationType="fade">
+          <View style={styles.uploadLoadingOverlay}>
+            <View style={styles.uploadLoadingCard}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={styles.uploadLoadingText}>Uploading profile picture...</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
+
+      {/* Goal Selection Modal */}
+      <Modal visible={showGoalModal} transparent animationType="fade" onRequestClose={() => setShowGoalModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowGoalModal(false)}>
+          <View style={styles.selectionSheet}>
+            <View style={styles.settingsHandle} />
+            <Text style={styles.settingsTitle}>SELECT OBJECTIVE</Text>
+            {GOALS.map(goal => (
+              <TouchableOpacity
+                key={goal}
+                style={styles.selectionItem}
+                onPress={() => handleSelectGoal(goal)}
+              >
+                <Text style={[styles.selectionText, viewedUser?.goal === goal && styles.selectionTextActive]}>
+                  {goal}
+                </Text>
+                {viewedUser?.goal === goal && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Region Selection Modal */}
+      <Modal visible={showRegionModal} transparent animationType="fade" onRequestClose={() => setShowRegionModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowRegionModal(false)}>
+          <View style={styles.selectionSheet}>
+            <View style={styles.settingsHandle} />
+            <Text style={styles.settingsTitle}>SELECT REGION</Text>
+            {REGIONS.map(region => (
+              <TouchableOpacity
+                key={region}
+                style={styles.selectionItem}
+                onPress={() => handleSelectRegion(region)}
+              >
+                <Text style={[styles.selectionText, viewedUser?.region === region && styles.selectionTextActive]}>
+                  {region}
+                </Text>
+                {viewedUser?.region === region && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Admin Modals - only shown when viewing other user's profile as admin */}
+      {!isOwnProfile && isAdmin && (
+        <>
+          <AccoladePickerModal
+            visible={showAccoladePicker}
+            onClose={() => setShowAccoladePicker(false)}
+            userId={viewedUser?.id || viewedUser?._id}
+            currentAccolades={viewedUser?.accolades || []}
+            onAccoladesUpdated={handleUserUpdated}
+            api={api}
+          />
+          <AdminProfileEditModal
+            visible={showAdminEditModal}
+            onClose={() => setShowAdminEditModal(false)}
+            user={viewedUser}
+            onUserUpdated={handleUserUpdated}
+            api={api}
+          />
+        </>
+      )}
+
+      {/* Tutorial Modal - XP System */}
+      <TutorialModal
+        topic={tutorialTopic}
+        visible={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </View>
   );
 }
@@ -749,22 +1627,36 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#050505' },
   loadingContainer: { justifyContent: 'center', alignItems: 'center' },
   iconBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)' },
+  adminActions: { flexDirection: 'row', gap: 8 },
+  adminActionBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)' },
   scroll: { flex: 1 },
-  
+  scrollContent: {
+    alignSelf: 'center',
+    width: CONTENT_WIDTH,
+    maxWidth: MAX_CONTENT_WIDTH,
+  },
+
   // Hero
   profileHero: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20 },
   avatarContainer: { marginBottom: 16 },
   avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: '#1a1a1a' },
   avatarPlaceholder: { backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   avatarInitials: { fontSize: 32, fontWeight: '800', color: '#fff' },
-  rankBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#9b2c2c', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 2, borderColor: '#050505' },
-  rankBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff' },
+  tierBadge: { position: 'absolute', bottom: -2, right: -2, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#050505' },
+  tierBadgeText: { fontSize: 14 },
+  tierBadgeImage: { position: 'absolute', bottom: -2, right: -2, width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#050505', backgroundColor: '#050505' },
+  cameraBadge: { position: 'absolute', bottom: 0, left: 0, backgroundColor: '#9b2c2c', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#050505' },
   userName: { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: 0.5, marginBottom: 4 },
   userHandle: { fontSize: 12, color: '#666', fontWeight: '600' },
-  
+
   bioSection: { marginTop: 12, paddingHorizontal: 32 },
   bioText: { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 18 },
   bioPlaceholder: { fontSize: 13, color: '#444', fontStyle: 'italic' },
+
+  // Accolades
+  accoladesContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 12 },
+  accoladeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  accoladeText: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
   // Stats
   statsMatrix: { flexDirection: 'row', backgroundColor: '#111', marginHorizontal: 20, marginTop: 24, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
@@ -773,37 +1665,97 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, fontWeight: '800', color: '#555', letterSpacing: 1 },
   statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.1)' },
 
-  // Info Grid
-  infoGrid: { flexDirection: 'row', paddingHorizontal: 20, marginTop: 12, gap: 12 },
-  infoCard: { flex: 1, backgroundColor: '#0f0f0f', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
-  infoLabel: { fontSize: 10, fontWeight: '800', color: '#444', marginBottom: 6, letterSpacing: 1 },
-  infoValue: { fontSize: 13, fontWeight: '700', color: '#ccc' },
+  // Info Grid - Responsive
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    marginTop: 16,
+    gap: 12,
+    justifyContent: 'space-between'
+  },
+  infoCard: {
+    width: IS_WIDE_SCREEN ? '48%' : (CONTENT_WIDTH - 52) / 2,
+    minWidth: 150,
+    backgroundColor: '#0f0f0f',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)'
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#555',
+    marginBottom: 2,
+    letterSpacing: 1
+  },
+  infoValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff'
+  },
 
-  // Videos
+  // Videos - Responsive
   videosSection: { paddingHorizontal: 20, marginTop: 32 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' },
   sectionTitle: { fontSize: 12, fontWeight: '800', color: '#666', letterSpacing: 1 },
   sectionCount: { fontSize: 12, fontWeight: '800', color: '#9b2c2c' },
-  videosGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 },
-  videoCard: { width: (SCREEN_WIDTH - 40 - 12) / 3, marginHorizontal: 2, marginBottom: 12 },
+  videosGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6, justifyContent: 'flex-start' },
+  videoCard: {
+    width: IS_WIDE_SCREEN ? '31%' : (CONTENT_WIDTH - 40 - 12) / 3,
+    minWidth: 100,
+    maxWidth: 140,
+    marginHorizontal: 2,
+    marginBottom: 12
+  },
   videoThumbnail: { aspectRatio: 1, backgroundColor: '#1a1a1a', borderRadius: 8, overflow: 'hidden', marginBottom: 6 },
   videoThumbnailImage: { width: '100%', height: '100%' },
   videoThumbnailFallback: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   videoOverlay: { position: 'absolute', top: 4, right: 4 },
   videoStatus: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 4, borderRadius: 4 },
+  videoDeleteButton: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.7)', padding: 6, borderRadius: 12 },
   videoExercise: { fontSize: 11, fontWeight: '700', color: '#ddd', marginBottom: 2 },
   videoMeta: { fontSize: 10, color: '#666' },
 
   // Settings
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  settingsSheet: { backgroundColor: '#161616', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end', alignItems: 'center' },
+  settingsSheet: { backgroundColor: '#161616', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%', width: IS_WIDE_SCREEN ? MAX_CONTENT_WIDTH : '100%', maxWidth: MAX_CONTENT_WIDTH },
+  settingsScroll: { flexGrow: 0 },
   settingsHandle: { width: 40, height: 4, backgroundColor: '#333', borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   settingsTitle: { fontSize: 12, fontWeight: '900', color: '#444', marginBottom: 16, letterSpacing: 1 },
   settingItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', gap: 16 },
   settingText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  settingTextWrap: { flex: 1 },
+  settingSubText: { fontSize: 12, color: '#888', marginTop: 2 },
+  inviteCodesList: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', paddingBottom: 12 },
+  inviteCodeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  inviteCodeMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  inviteCodeText: { fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: 1.1 },
+  inviteCodeStatus: { fontSize: 10, color: '#10B981', fontWeight: '800', letterSpacing: 0.8 },
+  inviteCodeStatusUsed: { color: '#666' },
+  inviteShareButton: { padding: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)' },
+  inviteEmptyText: { color: '#666', fontSize: 12, paddingVertical: 8 },
 
   // Edit Modal Styles
-  editModalContainer: { flex: 1, backgroundColor: '#0a0a0a' },
+  editModalContainer: { flex: 1, backgroundColor: '#0a0a0a', alignItems: 'center' },
+  editModalContent: { width: IS_WIDE_SCREEN ? MAX_CONTENT_WIDTH : '100%', maxWidth: MAX_CONTENT_WIDTH, flex: 1 },
   editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#222' },
   editModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
   editModalCancelText: { color: '#888', fontSize: 16 },
@@ -823,5 +1775,92 @@ const styles = StyleSheet.create({
   // Video Modal
   videoModalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
   videoModalClose: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
-  fullScreenVideo: { width: '100%', height: 300 },
+  fullScreenVideo: { width: '100%', height: '100%' },
+
+  // Change Password Modal
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 60, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#ff003c',
+    flex: 1,
+  },
+  passwordInputContainer: {
+    position: 'relative',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#888',
+    flex: 1,
+  },
+
+  // Profile Picture Upload Loading
+  uploadLoadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadLoadingCard: {
+    backgroundColor: '#1a1a1a',
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  uploadLoadingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+
+  // Selection Sheet (Goal/Region)
+  selectionSheet: {
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 48,
+    width: IS_WIDE_SCREEN ? MAX_CONTENT_WIDTH : '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+  },
+  selectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  selectionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#888',
+  },
+  selectionTextActive: {
+    color: '#fff',
+  },
 });

@@ -220,13 +220,23 @@ export const LeaderboardItem = ({ rank, username, points, change, isCurrentUser 
 
 export const NotificationItem = ({ notification, onPress, onRead }) => {
   const getIconName = () => {
-    switch (notification.type) {
+    const requestedType = String(notification?.data?.requestedType || '').toLowerCase();
+    const notificationType = String(notification?.type || '').toLowerCase();
+    const resolvedType = requestedType || notificationType;
+
+    switch (resolvedType) {
       case 'rank_up': return 'trophy';
       case 'rank_down': return 'trending-down';
       case 'challenge_joined': return 'checkmark-circle';
+      case 'new_challenge': return 'trophy';
       case 'challenge_ending': return 'time';
+      case 'challenge_complete': return 'ribbon';
       case 'challenge_result': return 'flag';
       case 'streak_milestone': return 'flame';
+      case 'welcome': return 'sparkles';
+      case 'announcement': return 'megaphone';
+      case 'admin': return 'megaphone';
+      case 'system': return 'megaphone';
       default: return 'notifications';
     }
   };

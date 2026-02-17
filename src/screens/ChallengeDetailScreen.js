@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,18 +14,21 @@ import { useTheme } from '../context/ThemeContext';
 import { Typography } from '../constants/colors';
 import api from '../services/api';
 import { EXERCISES } from '../constants/exercises';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 export default function ChallengeDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { user } = useApp();
   const { theme } = useTheme();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const { challengeId } = route.params;
   const [loading, setLoading] = useState(true);
   const [challenge, setChallenge] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [mySubmissions, setMySubmissions] = useState([]);
   const [joining, setJoining] = useState(false);
-  
+  const getChallengeId = (item) => item?.id || item?._id || null;
+
   // Initialize styles at the top level
   const styles = createStyles(theme);
 
@@ -40,7 +42,8 @@ export default function ChallengeDetailScreen({ navigation, route }) {
 
       // Load challenge details
       const challengeResponse = await api.getChallenges({ includeExpired: 'true' });
-      const found = challengeResponse.data?.find(c => c._id === challengeId);
+      const found = challengeResponse.data?.find(c => getChallengeId(c) === challengeId);
+      const resolvedChallengeId = getChallengeId(found) || challengeId;
 
       if (found) {
         setChallenge(found);
@@ -49,7 +52,7 @@ export default function ChallengeDetailScreen({ navigation, route }) {
       }
 
       // Load leaderboard
-      const leaderboardResponse = await api.request(`/api/challenges/${challengeId}/leaderboard?limit=50`);
+      const leaderboardResponse = await api.request(`/api/challenges/${resolvedChallengeId}/leaderboard?limit=50`);
 
       if (leaderboardResponse.success) {
         setLeaderboard(leaderboardResponse.data.leaderboard || []);
@@ -57,54 +60,76 @@ export default function ChallengeDetailScreen({ navigation, route }) {
 
       // Load my submissions if joined
       if (found?.joined) {
-        const submissionsResponse = await api.getMyChallengeSubmissions(challengeId);
+        const submissionsResponse = await api.getMyChallengeSubmissions(resolvedChallengeId);
         if (submissionsResponse.success) {
           setMySubmissions(submissionsResponse.data || []);
         }
       }
     } catch (err) {
       console.error('Error loading challenge:', err);
-      Alert.alert('Error', err.message || 'Failed to load challenge');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to load challenge',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const confirmLeave = () => {
-    Alert.alert(
-      "Leave Challenge?",
-      "You will lose your progress and remove your entry from the leaderboard. Are you sure?",
-      [
+    showAlert({
+      title: "Leave Challenge?",
+      message: "You will lose your progress and remove your entry from the leaderboard. Are you sure?",
+      icon: 'warning',
+      buttons: [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Leave", 
-          style: "destructive", 
-          onPress: handleJoinLeave 
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: handleJoinLeave
         }
       ]
-    );
+    });
   };
 
   const handleJoinLeave = async () => {
     try {
       setJoining(true);
+      const resolvedChallengeId = getChallengeId(challenge) || challengeId;
 
       if (challenge.joined) {
-        const response = await api.leaveChallenge(challengeId);
+        const response = await api.leaveChallenge(resolvedChallengeId);
         if (response.success) {
           setChallenge({ ...challenge, joined: false, progress: 0 });
           setMySubmissions([]);
-          Alert.alert("Left Challenge", "You have successfully left the challenge.");
+          showAlert({
+            title: "Left Challenge",
+            message: "You have successfully left the challenge.",
+            icon: 'success',
+            buttons: [{ text: 'OK', style: 'default' }]
+          });
         }
       } else {
-        const response = await api.joinChallenge(challengeId);
+        const response = await api.joinChallenge(resolvedChallengeId);
         if (response.success) {
           setChallenge({ ...challenge, joined: true, progress: 0 });
-          Alert.alert("Joined!", "Good luck with the challenge!");
+          showAlert({
+            title: "Joined!",
+            message: "Good luck with the challenge!",
+            icon: 'success',
+            buttons: [{ text: 'OK', style: 'default' }]
+          });
         }
       }
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to update challenge status');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to update challenge status',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setJoining(false);
     }
@@ -399,6 +424,9 @@ export default function ChallengeDetailScreen({ navigation, route }) {
           )}
         </View>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

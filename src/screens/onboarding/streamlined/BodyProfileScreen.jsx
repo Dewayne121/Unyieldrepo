@@ -24,15 +24,19 @@ const BodyProfileScreen = () => {
   const [heightCm, setHeightCm] = useState(bodyProfileData.heightCm || '');
   const [heightFt, setHeightFt] = useState(bodyProfileData.heightFt || '');
   const [heightIn, setHeightIn] = useState(bodyProfileData.heightIn || '');
+  const [weightKg, setWeightKg] = useState(bodyProfileData.weightKg || '');
+  const [weightLbs, setWeightLbs] = useState(bodyProfileData.weightLbs || '');
 
   const handleSkip = useCallback(() => {
-    // Skip with default values
+    // Skip with default values (weight is now mandatory)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     updateStepData(STEPS.BODY_PROFILE, {
       age: '25',
       heightCm: '170',
       heightFt: '5',
       heightIn: '7',
+      weightKg: '70',
+      weightLbs: '154',
       useMetric: true,
     });
     goToNextStep();
@@ -54,16 +58,20 @@ const BodyProfileScreen = () => {
     if (newUseMetric) {
       setHeightFt('');
       setHeightIn('');
+      setWeightLbs('');
     } else {
       setHeightCm('');
+      setWeightKg('');
     }
     updateStepData(STEPS.BODY_PROFILE, {
       useMetric: newUseMetric,
       heightCm: newUseMetric ? heightCm : '',
       heightFt: !newUseMetric ? heightFt : '',
       heightIn: !newUseMetric ? heightIn : '',
+      weightKg: newUseMetric ? weightKg : '',
+      weightLbs: !newUseMetric ? weightLbs : '',
     });
-  }, [useMetric, heightCm, heightFt, heightIn, STEPS, updateStepData]);
+  }, [useMetric, heightCm, heightFt, heightIn, weightKg, weightLbs, STEPS, updateStepData]);
 
   const handleAgeChange = useCallback((text) => {
     // Only allow numbers
@@ -80,8 +88,35 @@ const BodyProfileScreen = () => {
   }, [STEPS, updateStepData]);
 
   const handleHeightFtChange = useCallback((text) => {
-    // Only allow numbers, max 1 digit (max 7 ft)
-    const numericText = text.replace(/[^0-9]/g, '').slice(0, 1);
+    // Only allow numbers
+    let numericText = text.replace(/[^0-9]/g, '');
+
+    // Auto-format: if more than 1 digit, parse as feet + inches (e.g., "510" -> 5ft 10in)
+    if (numericText.length > 1) {
+      const ft = numericText.slice(0, 1);
+      const inches = numericText.slice(1);
+
+      // Validate feet (3-7)
+      const parsedFt = parseInt(ft, 10);
+      if (parsedFt >= 3 && parsedFt <= 7) {
+        setHeightFt(ft);
+
+        // Validate and set inches (0-11)
+        const parsedInches = parseInt(inches, 10);
+        if (!isNaN(parsedInches) && parsedInches >= 0 && parsedInches <= 11) {
+          setHeightIn(inches);
+          updateStepData(STEPS.BODY_PROFILE, { heightFt: ft, heightIn: inches });
+        } else {
+          // Clear inches if out of range
+          setHeightIn('');
+          updateStepData(STEPS.BODY_PROFILE, { heightFt: ft, heightIn: '' });
+        }
+        return;
+      }
+    }
+
+    // Normal single-digit input
+    numericText = numericText.slice(0, 1);
     setHeightFt(numericText);
     updateStepData(STEPS.BODY_PROFILE, { heightFt: numericText });
   }, [STEPS, updateStepData]);
@@ -93,17 +128,52 @@ const BodyProfileScreen = () => {
     updateStepData(STEPS.BODY_PROFILE, { heightIn: numericText });
   }, [STEPS, updateStepData]);
 
+  const handleWeightKgChange = useCallback((text) => {
+    // Allow numbers and decimal, max 6 characters
+    const numericText = text.replace(/[^0-9.]/g, '').slice(0, 6);
+    // Only allow one decimal point
+    const parts = numericText.split('.');
+    if (parts.length > 2) {
+      return;
+    }
+    setWeightKg(numericText);
+    updateStepData(STEPS.BODY_PROFILE, { weightKg: numericText });
+  }, [STEPS, updateStepData]);
+
+  const handleWeightLbsChange = useCallback((text) => {
+    // Allow numbers and decimal, max 6 characters
+    const numericText = text.replace(/[^0-9.]/g, '').slice(0, 6);
+    // Only allow one decimal point
+    const parts = numericText.split('.');
+    if (parts.length > 2) {
+      return;
+    }
+    setWeightLbs(numericText);
+    updateStepData(STEPS.BODY_PROFILE, { weightLbs: numericText });
+  }, [STEPS, updateStepData]);
+
   const handleNext = useCallback(() => {
+    // Validate weight before proceeding
+    const weight = useMetric ? parseFloat(weightKg) : parseFloat(weightLbs) / 2.20462;
+
+    if (!weight || weight < 40 || weight > 200) {
+      // Show alert or prevent navigation
+      // For now, we'll just not proceed if weight is invalid
+      return;
+    }
+
     // Ensure data is saved before proceeding
     updateStepData(STEPS.BODY_PROFILE, {
       age,
       heightCm: useMetric ? heightCm : '',
       heightFt: !useMetric ? heightFt : '',
       heightIn: !useMetric ? heightIn : '',
+      weightKg: useMetric ? weightKg : '',
+      weightLbs: !useMetric ? weightLbs : '',
       useMetric,
     });
     goToNextStep();
-  }, [age, heightCm, heightFt, heightIn, useMetric, STEPS, updateStepData, goToNextStep]);
+  }, [age, heightCm, heightFt, heightIn, weightKg, weightLbs, useMetric, STEPS, updateStepData, goToNextStep]);
 
   const isNextDisabled = !canGoNext(STEPS.BODY_PROFILE);
 
@@ -208,7 +278,7 @@ const BodyProfileScreen = () => {
                   value={heightFt}
                   onChangeText={handleHeightFtChange}
                   keyboardType="number-pad"
-                  maxLength={1}
+                  maxLength={3}
                 />
                 <Text style={[styles.unitSuffix, { color: theme.textMuted }]}>ft</Text>
               </View>
@@ -230,6 +300,58 @@ const BodyProfileScreen = () => {
                 />
                 <Text style={[styles.unitSuffix, { color: theme.textMuted }]}>in</Text>
               </View>
+            </View>
+          )}
+        </View>
+
+        {/* Weight Input - Required for competition */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, { color: theme.textMain }]}>
+              Weight <Text style={{ color: theme.primary }}>*</Text>
+            </Text>
+            <Text style={[styles.requiredHint, { color: theme.textMuted }]}>
+              Required for fair competition
+            </Text>
+          </View>
+
+          {useMetric ? (
+            <View
+              style={[
+                styles.inputContainer,
+                { backgroundColor: theme.bgCard, borderColor: theme.border },
+              ]}
+            >
+              <Ionicons name="fitness-outline" size={22} color={theme.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { color: theme.textMain }]}
+                placeholder="Enter weight"
+                placeholderTextColor={theme.textMuted}
+                value={weightKg}
+                onChangeText={handleWeightKgChange}
+                keyboardType="decimal-pad"
+                maxLength={6}
+              />
+              <Text style={[styles.unitSuffix, { color: theme.textMuted }]}>kg</Text>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.inputContainer,
+                { backgroundColor: theme.bgCard, borderColor: theme.border },
+              ]}
+            >
+              <Ionicons name="fitness-outline" size={22} color={theme.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { color: theme.textMain }]}
+                placeholder="Enter weight"
+                placeholderTextColor={theme.textMuted}
+                value={weightLbs}
+                onChangeText={handleWeightLbsChange}
+                keyboardType="decimal-pad"
+                maxLength={6}
+              />
+              <Text style={[styles.unitSuffix, { color: theme.textMuted }]}>lbs</Text>
             </View>
           )}
         </View>
@@ -264,13 +386,41 @@ const BodyProfileScreen = () => {
           )
         )}
 
+        {useMetric && weightKg.length > 0 && (parseFloat(weightKg) < 40 || parseFloat(weightKg) > 200) && (
+          <View style={[styles.hintBox, { backgroundColor: theme.bgCard, borderColor: '#FFA500' }]}>
+            <Ionicons name="warning-outline" size={18} color="#FFA500" />
+            <Text style={[styles.hintText, { color: theme.textMuted }]}>
+              Please enter a valid weight (40-200 kg)
+            </Text>
+          </View>
+        )}
+
+        {!useMetric && weightLbs.length > 0 && (parseFloat(weightLbs) < 88 || parseFloat(weightLbs) > 440) && (
+          <View style={[styles.hintBox, { backgroundColor: theme.bgCard, borderColor: '#FFA500' }]}>
+            <Ionicons name="warning-outline" size={18} color="#FFA500" />
+            <Text style={[styles.hintText, { color: theme.textMuted }]}>
+              Please enter a valid weight (88-440 lbs)
+            </Text>
+          </View>
+        )}
+
         {/* Privacy Note */}
         <View style={[styles.privacyBox, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
           <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} style={styles.privacyIcon} />
           <Text style={[styles.privacyText, { color: theme.textMuted }]}>
-            This information helps us provide personalized recommendations. You can update this anytime in your profile.
+            Your weight is required for fair competition (strength ratio ranking). This helps us match you with competitors in your weight class. You can update this anytime in your profile.
           </Text>
         </View>
+
+        {/* Height Input Hint */}
+        {!useMetric && (
+          <View style={[styles.hintBox, { backgroundColor: theme.bgCard, borderColor: theme.primary }]}>
+            <Ionicons name="information-circle-outline" size={18} color={theme.primary} style={styles.privacyIcon} />
+            <Text style={[styles.hintText, { color: theme.textMuted }]}>
+              Quick entry: Type "510" in the feet field to enter 5ft 10in
+            </Text>
+          </View>
+        )}
       </Animated.View>
     </OnboardingLayout>
   );
@@ -291,6 +441,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
     marginBottom: Spacing.sm,
+  },
+  requiredHint: {
+    ...Typography.bodySmall,
+    fontSize: 12,
+    color: '#FF6B35', // Use fixed color instead of theme.primary
   },
   unitToggle: {
     flexDirection: 'row',

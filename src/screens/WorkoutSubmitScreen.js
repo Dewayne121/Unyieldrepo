@@ -1,16 +1,18 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, ActivityIndicator, Linking, AppState } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 
-import { useApp, EXERCISES, LS_GEMINI_KEY, calcPoints, MAX_REPS, MAX_WEIGHT_KG, MAX_WEIGHT_LBS } from '../context/AppContext';
+import { useApp, EXERCISES, LS_GEMINI_KEY, calcPoints, calcStrengthRatio, formatStrengthRatio, MAX_REPS, MAX_WEIGHT_KG, MAX_WEIGHT_LBS } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { SKINS } from '../constants/colors';
 import api from '../services/api';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 const LS_WORKOUT_VIDEOS = 'unyield_workout_videos';
 
@@ -131,6 +133,7 @@ export default function WorkoutSubmitScreen({ navigation }) {
   const { theme, skin } = useTheme();
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
   const { user, addLog, weightUnit, toggleWeightUnit } = useApp();
+  const isFocused = useIsFocused();
 
   const [exerciseId, setExerciseId] = useState(EXERCISES[0].id);
   const [reps, setReps] = useState(0);
@@ -142,14 +145,49 @@ export default function WorkoutSubmitScreen({ navigation }) {
   const [recordingUri, setRecordingUri] = useState(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const recTimer = useRef(null);
+  const recordStartRef = useRef(0);
+  const recordSecondsRef = useRef(0);
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [videoSource, setVideoSource] = useState('camera'); // 'camera' or 'gallery'
   const [blurFaces, setBlurFaces] = useState(false);
   const [blurring, setBlurring] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraKey, setCameraKey] = useState(0);
+  const [facing, setFacing] = useState('back');
+  const cameraBootTimeoutRef = useRef(null);
+
+  // Custom alert state
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   // Get max weight based on current unit
   const maxWeight = weightUnit === 'kg' ? MAX_WEIGHT_KG : MAX_WEIGHT_LBS;
+
+  const resetCamera = useCallback(() => {
+    setCameraError('');
+    setCameraReady(false);
+    setCameraKey((prev) => prev + 1);
+  }, []);
+
+  const handleCameraReady = useCallback(() => {
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+      cameraBootTimeoutRef.current = null;
+    }
+    setCameraReady(true);
+    setCameraError('');
+  }, []);
+
+  const handleCameraError = useCallback((error) => {
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+      cameraBootTimeoutRef.current = null;
+    }
+    setCameraReady(false);
+    setCameraError(error?.message || 'Camera unavailable.');
+  }, []);
 
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
@@ -174,39 +212,88 @@ export default function WorkoutSubmitScreen({ navigation }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isFocused) return;
+    resetCamera();
+  }, [isFocused, resetCamera]);
+
+  // Show warning if user doesn't have weight set
+  useEffect(() => {
+    if (!isFocused) return;
+
+    if (!hasValidWeight && user) {
+      showAlert({
+        title: 'Weight Required',
+        message: 'Please update your profile with your weight to participate in competition. This is required for fair strength ratio ranking.',
+        icon: 'warning',
+        buttons: [
+          { text: 'Update Profile', style: 'default', onPress: () => navigation.navigate('Profile') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      });
+    }
+  }, [isFocused, hasValidWeight, user]);
+
+  useEffect(() => {
+    if (!permission?.granted || !isFocused) return;
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+    }
+    cameraBootTimeoutRef.current = setTimeout(() => {
+      setCameraError((prev) => prev || 'Camera failed to start. Try again or use system camera.');
+    }, 6000);
+    return () => {
+      if (cameraBootTimeoutRef.current) {
+        clearTimeout(cameraBootTimeoutRef.current);
+        cameraBootTimeoutRef.current = null;
+      }
+    };
+  }, [permission?.granted, isFocused, cameraKey]);
+
+
   const handleCancel = () => {
     if (isRecording) {
-      Alert.alert(
-        'Recording in Progress',
-        'A recording is currently in progress. Are you sure you want to cancel?',
-        [
+      showAlert({
+        title: 'Recording in Progress',
+        message: 'A recording is currently in progress. Are you sure you want to cancel?',
+        icon: 'warning',
+        buttons: [
           { text: 'Keep Recording', style: 'cancel' },
           {
             text: 'Cancel Anyway',
             style: 'destructive',
             onPress: async () => {
-              if (recTimer.current) {
-                clearInterval(recTimer.current);
-              }
-              if (cameraRef.current) {
-                try {
-                  await cameraRef.current.stopRecording();
-                } catch (err) {
-                  console.error('Error stopping recording:', err);
-                }
-              }
+              await stopRecordingSafely();
               navigation.pop();
             },
           },
         ]
-      );
+      });
     } else {
       navigation.pop();
     }
   };
 
   const exercise = useMemo(() => EXERCISES.find((x) => x.id === exerciseId) || EXERCISES[0], [exerciseId]);
+  const hasValidWeight = user?.weight && user.weight > 0;
+
+  // Calculate strength ratio instead of points
+  const strengthRatio = useMemo(() => {
+    if (!hasValidWeight) return 0;
+
+    // Convert weight to kg if needed
+    const weightKg = weightUnit === 'lbs' ? weight / 2.20462 : weight;
+
+    return calcStrengthRatio({
+      reps,
+      weightLifted: weightKg,
+      bodyweight: user.weight
+    });
+  }, [exercise, reps, weight, user?.weight, weightUnit, hasValidWeight]);
+
   const points = useMemo(() => calcPoints(exercise, reps, weight, user?.streak || 0), [exercise, reps, weight, user]);
+  const canSubmitVideo = hasRecording && !!recordingUri && recordSeconds >= 5 && hasValidWeight;
+  const isSubmitDisabled = isSubmitting || blurring || (reps <= 0 && exercise.name !== 'Run (Km)') || !canSubmitVideo;
 
   const adjustReps = (delta) => {
     setReps((prev) => Math.max(0, prev + delta));
@@ -216,82 +303,186 @@ export default function WorkoutSubmitScreen({ navigation }) {
     setWeight((prev) => Math.max(0, prev + delta));
   };
 
-  const toggleRecording = async () => {
-    if (isRecording) {
-      // Stop recording
-      if (cameraRef.current) {
-        try {
-          await cameraRef.current.stopRecording();
-        } catch (err) {
-          console.error('Error stopping recording:', err);
-        }
+  const openSettings = () => {
+    Linking.openSettings().catch(() => {});
+  };
+
+  const ensureCameraPermission = async () => {
+    if (permission?.granted) return true;
+    const result = await requestPermission();
+    if (result.granted) return true;
+    showAlert({
+      title: 'Camera Permission',
+      message: 'Camera access is needed to record. You can still upload a video from your gallery.',
+      icon: 'warning',
+      buttons: [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Open Settings', style: 'default', onPress: openSettings },
+      ]
+    });
+    return false;
+  };
+
+  const ensureMicrophonePermission = async () => {
+    if (micPermission?.granted) return true;
+    const result = await requestMicPermission();
+    if (result.granted) return true;
+    showAlert({
+      title: 'Microphone Disabled',
+      message: 'Your video will record without audio.',
+      icon: 'info',
+      buttons: [{ text: 'OK', style: 'default' }]
+    });
+    return false;
+  };
+
+  const resolveDurationSeconds = (durationValue) => {
+    const duration = typeof durationValue === 'number' ? durationValue : 0;
+    if (!duration) return 0;
+    return duration > 1000 ? Math.round(duration / 1000) : Math.round(duration);
+  };
+
+  const applyVideoSelection = (uri, durationSeconds, source) => {
+    if (!uri) return false;
+    if (durationSeconds < 5) {
+      showAlert({
+        title: 'Video Too Short',
+        message: 'Video must be at least 5 seconds long. Please try again.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+      setRecordingUri(null);
+      setHasRecording(false);
+      setRecordSeconds(0);
+      recordSecondsRef.current = 0;
+      return false;
+    }
+    setRecordingUri(uri);
+    setRecordSeconds(durationSeconds);
+    recordSecondsRef.current = durationSeconds;
+    setHasRecording(true);
+    setIsRecording(false);
+    setVideoSource(source);
+    return true;
+  };
+
+  const recordWithSystemCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please allow camera access to record a video.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        return;
       }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaType.Videos,
+        videoQuality: 1,
+        videoMaxDuration: 60,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const durationSeconds = resolveDurationSeconds(asset.duration);
+        applyVideoSelection(asset.uri, durationSeconds || 5, 'camera');
+      }
+    } catch (error) {
+      console.error('Error recording with system camera:', error);
+      showAlert({
+        title: 'Error',
+        message: 'Failed to record video. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+  };
+
+  const stopRecordingSafely = useCallback(async () => {
+    if (!isRecording) return;
+    if (recTimer.current) {
+      clearInterval(recTimer.current);
+    }
+    try {
+      await cameraRef.current?.stopRecording();
+    } catch (err) {
+      console.error('Error stopping recording:', err);
+    } finally {
       setIsRecording(false);
-      setHasRecording(true);
+    }
+  }, [isRecording]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        stopRecordingSafely();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [stopRecordingSafely]);
+
+  const startRecording = async () => {
+    const hasCameraPermission = await ensureCameraPermission();
+    if (!hasCameraPermission) return;
+
+    const micAllowed = await ensureMicrophonePermission();
+    if (!cameraRef.current || !cameraReady || cameraError) {
+      await recordWithSystemCamera();
+      return;
+    }
+
+    try {
+      setIsRecording(true);
+      setHasRecording(false);
+      setRecordSeconds(0);
+      recordSecondsRef.current = 0;
+      setRecordingUri(null);
+      setVideoSource('camera');
+
+      recordStartRef.current = Date.now();
+      recTimer.current = setInterval(() => {
+        recordSecondsRef.current += 1;
+        setRecordSeconds(recordSecondsRef.current);
+      }, 1000);
+
+      const result = await cameraRef.current.recordAsync({
+        quality: '480p',
+        maxDuration: 60,
+        mute: !micAllowed,
+      });
+
+      const durationSeconds = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000));
       if (recTimer.current) {
         clearInterval(recTimer.current);
       }
-    } else {
-      // Request camera permission if needed
-      if (!permission?.granted) {
-        const result = await requestPermission();
-        if (!result.granted) {
-          Alert.alert(
-            'Camera Permission',
-            'Camera access is needed for recording. You can still log your workout without recording.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
+      applyVideoSelection(result?.uri, durationSeconds, 'camera');
+      console.log('Recording saved:', result?.uri);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      if (recTimer.current) {
+        clearInterval(recTimer.current);
       }
-
-      // Start recording
-      if (cameraRef.current) {
-        try {
-          setIsRecording(true);
-          setHasRecording(false);
-          setRecordSeconds(0);
-          setRecordingUri(null);
-
-          // Start timer immediately (don't wait for recording to finish)
-          recTimer.current = setInterval(() => {
-            setRecordSeconds((prev) => prev + 1);
-          }, 1000);
-
-          // Start recording - promise resolves when recording stops
-          cameraRef.current.recordAsync({
-            quality: '480p',
-            maxDuration: 60,
-            mute: false,
-          }).then((result) => {
-            setRecordingUri(result.uri);
-            setHasRecording(true);
-            setIsRecording(false);
-            if (recTimer.current) {
-              clearInterval(recTimer.current);
-            }
-            console.log('Recording saved:', result.uri);
-          }).catch((err) => {
-            console.error('Recording error:', err);
-            setIsRecording(false);
-            if (recTimer.current) {
-              clearInterval(recTimer.current);
-            }
-          });
-        } catch (err) {
-          console.error('Failed to start recording:', err);
-          setIsRecording(false);
-          if (recTimer.current) {
-            clearInterval(recTimer.current);
-          }
-          Alert.alert(
-            'Recording Error',
-            'Could not start recording. You can still log your workout.',
-            [{ text: 'OK' }]
-          );
-        }
-      }
+      setIsRecording(false);
+      showAlert({
+        title: 'Recording Error',
+        message: 'Could not start recording. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      await stopRecordingSafely();
+      return;
+    }
+    await startRecording();
   };
 
   const formatTimer = () => {
@@ -305,57 +496,35 @@ export default function WorkoutSubmitScreen({ navigation }) {
       // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please grant permission to access your photo library to select a video.',
-          [{ text: 'OK' }]
-        );
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please grant permission to access your photo library to select a video.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
       // Pick video from gallery
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ImagePicker.MediaType.Videos,
         videoQuality: 1, // 0=low, 1=medium, 2=high
         allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-
-        // Get video duration
-        if (asset.duration) {
-          const durationSeconds = Math.floor(asset.duration);
-
-          // Validate minimum 5 seconds
-          if (durationSeconds < 5) {
-            Alert.alert(
-              'Video Too Short',
-              'Video must be at least 5 seconds long. Please select a longer video or record a new one.',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-
-          setRecordingUri(asset.uri);
-          setHasRecording(true);
-          setRecordSeconds(durationSeconds);
-          setVideoSource('gallery');
-        } else {
-          // If we can't get duration, set it to at least 5 seconds
-          setRecordingUri(asset.uri);
-          setHasRecording(true);
-          setRecordSeconds(5);
-          setVideoSource('gallery');
-        }
+        const durationSeconds = resolveDurationSeconds(asset.duration);
+        applyVideoSelection(asset.uri, durationSeconds || 5, 'gallery');
       }
     } catch (error) {
       console.error('Error picking video:', error);
-      Alert.alert(
-        'Error',
-        'Failed to pick video from gallery. Please try again.',
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'Error',
+        message: 'Failed to pick video from gallery. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -363,12 +532,13 @@ export default function WorkoutSubmitScreen({ navigation }) {
     if (!user || isSubmitting || (reps <= 0 && exercise.name !== 'Run (Km)')) return;
 
     // Check if recording exists and is at least 5 seconds
-    if (!hasRecording || recordSeconds < 5) {
-      Alert.alert(
-        'Recording Required',
-        'You must record at least 5 seconds of your workout to submit.',
-        [{ text: 'OK' }]
-      );
+    if (!canSubmitVideo) {
+      showAlert({
+        title: 'Recording Required',
+        message: 'You must record at least 5 seconds of your workout to submit.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
@@ -431,6 +601,7 @@ export default function WorkoutSubmitScreen({ navigation }) {
 
         if (uploadResponse.success && uploadResponse.data) {
           let serverVideoUrl = uploadResponse.data.videoUrl;
+          let originalVideoUrl = null; // Store original for admin view
           console.log('[WORKOUT SUBMIT] ✓ Step 1 complete - Video uploaded successfully');
           console.log('[WORKOUT SUBMIT] serverVideoUrl:', serverVideoUrl);
 
@@ -443,8 +614,9 @@ export default function WorkoutSubmitScreen({ navigation }) {
               const blurResponse = await api.blurVideo(serverVideoUrl);
 
               if (blurResponse.success && blurResponse.data?.blurredVideoUrl) {
+                originalVideoUrl = blurResponse.data.originalVideoUrl || serverVideoUrl;
                 serverVideoUrl = blurResponse.data.blurredVideoUrl;
-                console.log('[WORKOUT SUBMIT] Faces blurred:', blurResponse.data.facesFound);
+                console.log('[WORKOUT SUBMIT] Faces blurred:', blurResponse.data.facesFound || blurResponse.data.facesDetected);
               } else {
                 console.warn('[WORKOUT SUBMIT] Blur failed, using original video');
               }
@@ -461,7 +633,8 @@ export default function WorkoutSubmitScreen({ navigation }) {
             reps,
             weight: weightInKg,
             duration: recordSeconds,
-            videoUrl: serverVideoUrl
+            videoUrl: serverVideoUrl,
+            originalVideoUrl: originalVideoUrl
           });
 
           console.log('[WORKOUT SUBMIT] About to call api.submitVideo...');
@@ -470,7 +643,8 @@ export default function WorkoutSubmitScreen({ navigation }) {
             reps,
             weight: weightInKg,
             duration: recordSeconds,
-            videoUrl: serverVideoUrl, // Server-hosted URL (or blurred URL)
+            videoUrl: serverVideoUrl, // Blurred video URL (public)
+            originalVideoUrl: originalVideoUrl, // Original unblurred URL (admin only)
             thumbnailUrl: null,
           });
 
@@ -518,18 +692,53 @@ export default function WorkoutSubmitScreen({ navigation }) {
       {/* Full-screen camera background */}
       <View style={styles.cameraContainer}>
         {permission?.granted ? (
-          <CameraView
-            ref={cameraRef}
-            style={styles.cameraPreview}
-            facing="back"
-            mode="video"
-            mute={false}
-          />
+          <>
+            <CameraView
+              key={cameraKey}
+              ref={cameraRef}
+              style={styles.cameraPreview}
+              facing={facing}
+              mode="video"
+              mute={!micPermission?.granted}
+              active={isFocused}
+              onCameraReady={handleCameraReady}
+              onMountError={handleCameraError}
+            />
+            {!cameraReady && !cameraError && (
+              <View style={styles.cameraOverlay}>
+                <ActivityIndicator size="large" color={theme.textMain} />
+                <Text style={styles.cameraOverlayText}>STARTING CAMERA...</Text>
+              </View>
+            )}
+            {!!cameraError && (
+              <View style={styles.cameraErrorOverlay}>
+                <Ionicons name="alert-circle-outline" size={36} color={theme.textMain} />
+                <Text style={styles.cameraErrorTitle}>CAMERA UNAVAILABLE</Text>
+                <Text style={styles.cameraErrorText}>{cameraError}</Text>
+                <View style={styles.cameraErrorActions}>
+                  <TouchableOpacity onPress={resetCamera} style={styles.cameraErrorButton}>
+                    <Text style={styles.cameraErrorButtonText}>RETRY</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={recordWithSystemCamera} style={styles.cameraErrorButtonAlt}>
+                    <Text style={styles.cameraErrorButtonAltText}>USE SYSTEM CAMERA</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </>
         ) : (
           <View style={styles.cameraPlaceholder}>
             <Ionicons name="videocam-outline" size={64} color={theme.textMuted} />
             <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
               <Text style={styles.permissionButtonText}>ENABLE CAMERA</Text>
+            </TouchableOpacity>
+            {!permission?.canAskAgain && (
+              <TouchableOpacity onPress={openSettings} style={styles.permissionButtonSecondary}>
+                <Text style={styles.permissionButtonSecondaryText}>OPEN SETTINGS</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={recordWithSystemCamera} style={styles.permissionButtonSecondary}>
+              <Text style={styles.permissionButtonSecondaryText}>USE SYSTEM CAMERA</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -546,7 +755,14 @@ export default function WorkoutSubmitScreen({ navigation }) {
             <Text style={styles.timer}>{formatTimer()}</Text>
           )}
         </View>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+          activeOpacity={0.85}
+          style={styles.iconButton}
+          disabled={isRecording}
+        >
+          <Ionicons name="camera-reverse" size={24} color={theme.textMain} />
+        </TouchableOpacity>
       </View>
 
       {/* Bottom Controls - floating */}
@@ -608,8 +824,8 @@ export default function WorkoutSubmitScreen({ navigation }) {
             />
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>GAIN</Text>
-            <Text style={[styles.statValue, { color: theme.primary }]}>+{points}</Text>
+            <Text style={styles.statLabel}>RATIO</Text>
+            <Text style={[styles.statValue, { color: theme.primary }]}>{formatStrengthRatio(strengthRatio)}</Text>
           </View>
         </View>
 
@@ -682,18 +898,21 @@ export default function WorkoutSubmitScreen({ navigation }) {
           activeOpacity={0.8}
           style={[
             styles.submitButton,
-            ((reps <= 0 && exercise.name !== 'Run (Km)') || !hasRecording || recordSeconds < 5) && styles.submitDisabled
+            isSubmitDisabled && styles.submitDisabled
           ]}
-          disabled={isSubmitting || blurring || (reps <= 0 && exercise.name !== 'Run (Km)') || !hasRecording || recordSeconds < 5}
+          disabled={isSubmitDisabled}
         >
           <Text style={styles.submitText}>
             {isSubmitting || blurring ? 'TRANSMITTING...' :
-             !hasRecording ? 'RECORD REQUIRED (5s MIN)' :
-             recordSeconds < 5 ? `KEEP RECORDING (${5 - recordSeconds}s)` :
+             !recordingUri ? 'RECORD REQUIRED (5s MIN)' :
+             !canSubmitVideo ? `KEEP RECORDING (${5 - recordSeconds}s)` :
              'TRANSMIT LOG'}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </KeyboardAvoidingView>
   );
 }
@@ -716,6 +935,71 @@ function createStyles(theme, isDark) {
       justifyContent: 'center',
       backgroundColor: theme.bgPanel,
     },
+    cameraOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.35)',
+    },
+    cameraOverlayText: {
+      marginTop: 8,
+      fontSize: 11,
+      fontWeight: '700',
+      color: theme.textMain,
+      letterSpacing: 1,
+    },
+    cameraErrorOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    cameraErrorTitle: {
+      marginTop: 10,
+      fontSize: 12,
+      fontWeight: '800',
+      color: theme.textMain,
+      letterSpacing: 1.2,
+    },
+    cameraErrorText: {
+      marginTop: 8,
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.textMuted,
+      textAlign: 'center',
+    },
+    cameraErrorActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 16,
+    },
+    cameraErrorButton: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: theme.primary,
+    },
+    cameraErrorButtonText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: theme.textMain,
+      letterSpacing: 1,
+    },
+    cameraErrorButtonAlt: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: theme.shadow,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    cameraErrorButtonAltText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: theme.textMain,
+      letterSpacing: 1,
+    },
     permissionButton: {
       marginTop: 20,
       paddingHorizontal: 24,
@@ -726,6 +1010,21 @@ function createStyles(theme, isDark) {
     permissionButtonText: {
       color: theme.textMain,
       fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1,
+    },
+    permissionButtonSecondary: {
+      marginTop: 10,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.shadow,
+    },
+    permissionButtonSecondaryText: {
+      color: theme.textMain,
+      fontSize: 11,
       fontWeight: '700',
       letterSpacing: 1,
     },

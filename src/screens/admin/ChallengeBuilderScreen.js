@@ -6,21 +6,35 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import api from '../../services/api';
 import { EXERCISES, EXERCISE_CATEGORIES } from '../../constants/exercises';
-import { colors } from '../../constants/colors';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
+
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 export default function ChallengeBuilderScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const { challenge, isEdit } = route.params || {};
   const [saving, setSaving] = useState(false);
+  const getChallengeId = (item) => item?.id || item?._id || null;
 
   // Form state
   const [title, setTitle] = useState(challenge?.title || '');
@@ -51,27 +65,57 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
   const handleSave = async () => {
     // Validation
     if (!title.trim()) {
-      Alert.alert('Required', 'Please enter a challenge title');
+      showAlert({
+        title: 'Required',
+        message: 'Please enter a challenge title',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (!description.trim()) {
-      Alert.alert('Required', 'Please enter a description');
+      showAlert({
+        title: 'Required',
+        message: 'Please enter a description',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (challengeType === 'exercise' && selectedExercises.length === 0) {
-      Alert.alert('Required', 'Please select at least one exercise');
+      showAlert({
+        title: 'Required',
+        message: 'Please select at least one exercise',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (challengeType === 'custom' && !customMetricName.trim()) {
-      Alert.alert('Required', 'Please enter a custom metric name');
+      showAlert({
+        title: 'Required',
+        message: 'Please enter a custom metric name',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (!target || parseInt(target) <= 0) {
-      Alert.alert('Required', 'Please enter a valid target');
+      showAlert({
+        title: 'Required',
+        message: 'Please enter a valid target',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (endDate <= startDate) {
-      Alert.alert('Invalid', 'End date must be after start date');
+      showAlert({
+        title: 'Invalid',
+        message: 'End date must be after start date',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
@@ -99,25 +143,33 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
 
       let response;
       if (isEdit && challenge) {
-        response = await api.updateChallenge(challenge._id, challengeData);
+        const challengeId = getChallengeId(challenge);
+        if (!challengeId) {
+          throw new Error('Challenge ID is missing.');
+        }
+        response = await api.updateChallenge(challengeId, challengeData);
       } else {
         response = await api.createChallenge(challengeData);
       }
 
       if (response.success) {
-        Alert.alert(
-          'Success',
-          isEdit ? 'Challenge updated successfully' : 'Challenge created successfully',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack(),
-            },
-          ]
-        );
+        showAlert({
+          title: 'Success',
+          message: isEdit ? 'Challenge updated successfully' : 'Challenge created successfully',
+          icon: 'success',
+          buttons: [{
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          }]
+        });
       }
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to save challenge');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to save challenge',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setSaving(false);
     }
@@ -141,7 +193,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={C.white} />
         </TouchableOpacity>
         <Text style={styles.pageTitle}>{isEdit ? 'Edit Challenge' : 'Create Challenge'}</Text>
         <TouchableOpacity
@@ -150,7 +202,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={C.white} />
           ) : (
             <Text style={styles.saveButtonText}>Save</Text>
           )}
@@ -182,14 +234,14 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
           <TextInput
             style={styles.input}
             placeholder="Challenge Title"
-            placeholderTextColor="#666"
+            placeholderTextColor={C.textSubtle}
             value={title}
             onChangeText={setTitle}
           />
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Description"
-            placeholderTextColor="#666"
+            placeholderTextColor={C.textSubtle}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -209,7 +261,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
                 <Text style={styles.selectButtonText}>
                   {selectedExercises.length} selected
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color="#ff003c" />
+                <Ionicons name="chevron-forward" size={16} color={C.accent} />
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exercisesScroll}>
@@ -219,7 +271,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
                   <View key={exId} style={styles.exerciseChip}>
                     <Text style={styles.exerciseChipText}>{exercise.name}</Text>
                     <TouchableOpacity onPress={() => toggleExercise(exId)}>
-                      <Ionicons name="close-circle" size={16} color="#ff003c" />
+                      <Ionicons name="close-circle" size={16} color={C.accent} />
                     </TouchableOpacity>
                   </View>
                 ) : null;
@@ -238,7 +290,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
             <TextInput
               style={styles.input}
               placeholder="e.g., Plank Hold, Sprint Distance"
-              placeholderTextColor="#666"
+              placeholderTextColor={C.textSubtle}
               value={customMetricName}
               onChangeText={setCustomMetricName}
             />
@@ -270,7 +322,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
             <TextInput
               style={styles.targetInput}
               placeholder="0"
-              placeholderTextColor="#666"
+              placeholderTextColor={C.textSubtle}
               value={target}
               onChangeText={setTarget}
               keyboardType="numeric"
@@ -288,7 +340,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
             style={styles.dateButton}
             onPress={() => setShowStartDatePicker(true)}
           >
-            <Ionicons name="calendar" size={20} color="#888" />
+            <Ionicons name="calendar" size={20} color={C.textSubtle} />
             <Text style={styles.dateButtonText}>
               Start: {startDate.toLocaleDateString()}
             </Text>
@@ -297,7 +349,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
             style={styles.dateButton}
             onPress={() => setShowEndDatePicker(true)}
           >
-            <Ionicons name="calendar" size={20} color="#888" />
+            <Ionicons name="calendar" size={20} color={C.textSubtle} />
             <Text style={styles.dateButtonText}>
               End: {endDate.toLocaleDateString()}
             </Text>
@@ -328,7 +380,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
           <TextInput
             style={styles.input}
             placeholder="100"
-            placeholderTextColor="#666"
+            placeholderTextColor={C.textSubtle}
             value={reward}
             onChangeText={setReward}
             keyboardType="numeric"
@@ -341,7 +393,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Enter any specific rules or requirements..."
-            placeholderTextColor="#666"
+            placeholderTextColor={C.textSubtle}
             value={rules}
             onChangeText={setRules}
             multiline
@@ -383,7 +435,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
               <Ionicons
                 name={requiresVideo ? "checkmark" : "close"}
                 size={20}
-                color={requiresVideo ? "#000" : "#888"}
+                color={requiresVideo ? C.black : C.textSubtle}
               />
             </TouchableOpacity>
           </View>
@@ -421,7 +473,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Exercises</Text>
               <TouchableOpacity onPress={() => setShowExerciseSelector(false)}>
-                <Ionicons name="close" size={28} color="#fff" />
+                <Ionicons name="close" size={28} color={C.white} />
               </TouchableOpacity>
             </View>
 
@@ -452,7 +504,7 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
                     {exercise.name}
                   </Text>
                   {selectedExercises.includes(exercise.id) && (
-                    <Ionicons name="checkbox" size={24} color="#ff003c" />
+                    <Ionicons name="checkbox" size={24} color={C.accent} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -469,237 +521,176 @@ export default function ChallengeBuilderScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
+  container: ADMIN_SURFACES.page,
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   backButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
     textAlign: 'center',
+    ...T.h2,
   },
   saveButton: {
-    backgroundColor: '#ff003c',
+    backgroundColor: C.accent,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: R.md,
   },
   saveButtonDisabled: {
-    backgroundColor: '#333',
+    backgroundColor: C.surface,
   },
   saveButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    color: C.white,
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
+  content: { flex: 1, padding: S.xl },
+  section: { marginBottom: S.xl },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  sectionTitle: { ...T.caption, marginBottom: 10 },
+  typeSelector: { flexDirection: 'row', gap: 8 },
   typeButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    paddingVertical: 10,
+    borderRadius: R.md,
+    backgroundColor: C.card,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  typeButtonActive: {
-    backgroundColor: '#ff003c',
-  },
-  typeButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
-  },
-  typeButtonTextActive: {
-    color: '#fff',
-  },
+  typeButtonActive: { backgroundColor: C.accentSoft, borderColor: C.accent },
+  typeButtonText: { fontSize: 11, fontWeight: '600', color: C.textSubtle },
+  typeButtonTextActive: { color: C.accent },
   input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 14,
-    color: '#fff',
-    fontSize: 14,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: 12,
+    color: C.text,
+    fontSize: 13,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  selectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  selectButtonText: {
-    fontSize: 12,
-    color: '#ff003c',
-    fontWeight: '600',
-  },
-  exercisesScroll: {
-    maxHeight: 40,
-  },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  selectButton: { flexDirection: 'row', alignItems: 'center' },
+  selectButtonText: { fontSize: 11, color: C.accent, fontWeight: '600' },
+  exercisesScroll: { maxHeight: 40 },
   exerciseChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
+    backgroundColor: C.surface,
+    borderRadius: R.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  exerciseChipText: {
-    fontSize: 12,
-    color: '#fff',
-    marginRight: 6,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  metricSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  exerciseChipText: { fontSize: 11, color: C.text, marginRight: 6 },
+  emptyText: { fontSize: 11, color: C.textSubtle, fontStyle: 'italic' },
+  metricSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metricButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: R.pill,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  metricButtonActive: {
-    backgroundColor: '#ff003c',
-  },
-  metricButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
-  },
-  metricButtonTextActive: {
-    color: '#fff',
-  },
+  metricButtonActive: { backgroundColor: C.accentSoft, borderColor: C.accent },
+  metricButtonText: { fontSize: 11, fontWeight: '600', color: C.textSubtle },
+  metricButtonTextActive: { color: C.accent },
   targetInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  targetInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#fff',
-  },
-  targetUnit: {
-    fontSize: 14,
-    color: '#888',
-    marginLeft: 8,
-  },
+  targetInput: { flex: 1, fontSize: 14, color: C.text },
+  targetUnit: { fontSize: 12, color: C.textSubtle, marginLeft: 8 },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  dateButtonText: {
-    fontSize: 14,
-    color: '#fff',
-    marginLeft: 12,
-  },
-  optionsContainer: {
-    gap: 8,
-  },
+  dateButtonText: { fontSize: 12, color: C.text, marginLeft: 10 },
+  optionsContainer: { gap: 8 },
   optionCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 14,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    backgroundColor: C.card,
+    borderRadius: R.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  optionCardActive: {
-    borderColor: '#ff003c',
-  },
-  optionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#888',
-    marginBottom: 4,
-  },
-  optionTitleActive: {
-    color: '#fff',
-  },
-  optionDesc: {
-    fontSize: 12,
-    color: '#666',
-  },
+  optionCardActive: { borderColor: C.accent },
+  optionTitle: { fontSize: 13, fontWeight: '700', color: C.text, marginBottom: 4 },
+  optionTitleActive: { color: C.accent },
+  optionDesc: { fontSize: 11, color: C.textSubtle },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: C.card,
+    borderRadius: R.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   toggle: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#333',
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: C.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  toggleActive: {
-    backgroundColor: '#ff003c',
-  },
+  toggleActive: { backgroundColor: C.accent },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#050505',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: C.panel,
+    borderTopLeftRadius: R.xl,
+    borderTopRightRadius: R.xl,
     height: '80%',
     paddingTop: 16,
   },
@@ -707,74 +698,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    paddingHorizontal: S.xl,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  categoryScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
+  modalTitle: { ...T.h2 },
+  categoryScroll: { paddingHorizontal: S.xl, paddingVertical: 12 },
   categoryTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: R.pill,
+    backgroundColor: C.card,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  categoryTabActive: {
-    backgroundColor: '#ff003c',
-  },
-  categoryTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
-  },
-  categoryTabTextActive: {
-    color: '#fff',
-  },
-  exerciseList: {
-    flex: 1,
-    padding: 16,
-  },
+  categoryTabActive: { backgroundColor: C.accentSoft, borderColor: C.accent },
+  categoryTabText: { fontSize: 11, fontWeight: '600', color: C.textSubtle },
+  categoryTabTextActive: { color: C.accent },
+  exerciseList: { flex: 1, padding: S.xl },
   exerciseItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
-    backgroundColor: '#0f0f0f',
-    borderRadius: 8,
+    padding: 12,
+    backgroundColor: C.card,
+    borderRadius: R.md,
     marginBottom: 8,
-  },
-  exerciseItemActive: {
-    backgroundColor: '#1a1a1a',
     borderWidth: 1,
-    borderColor: '#ff003c',
+    borderColor: C.border,
   },
-  exerciseName: {
-    fontSize: 14,
-    color: '#888',
-  },
-  exerciseNameActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  exerciseItemActive: { borderColor: C.accent },
+  exerciseName: { fontSize: 13, color: C.textSubtle },
+  exerciseNameActive: { color: C.text, fontWeight: '600' },
   modalDoneButton: {
-    backgroundColor: '#ff003c',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: C.accent,
+    margin: S.xl,
+    padding: 14,
+    borderRadius: R.md,
     alignItems: 'center',
   },
-  modalDoneButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
+  modalDoneButtonText: { fontSize: 14, fontWeight: '700', color: C.white, letterSpacing: 0.6 },
 });

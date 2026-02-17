@@ -35,6 +35,7 @@ export default function WelcomeScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [localError, setLocalError] = useState('');
 
   const styles = createStyles(theme, isDark);
@@ -53,6 +54,10 @@ export default function WelcomeScreen() {
     }
 
     if (mode === 'signup') {
+      if (!inviteCode.trim()) {
+        setLocalError('Invite code is required');
+        return;
+      }
       if (username.length < 3 || username.length > 20) {
         setLocalError('Username must be 3-20 characters');
         return;
@@ -72,7 +77,7 @@ export default function WelcomeScreen() {
     if (mode === 'signin') {
       result = await signInWithEmail(email, password);
     } else {
-      result = await signUpWithEmail(email, password, username);
+      result = await signUpWithEmail(email, password, username, inviteCode.trim().toUpperCase());
     }
 
     if (!result?.success) {
@@ -196,7 +201,7 @@ export default function WelcomeScreen() {
                   {mode === 'signin' ? 'Welcome Back' : 'Join UNYIELD'}
                 </Text>
                 <Text style={[styles.authSubtitle, { color: theme.textMuted }]}>
-                  {mode === 'signin' ? 'Sign in to continue' : 'Create your account'}
+                  {mode === 'signin' ? 'Sign in to continue' : 'Create your account with an invite code'}
                 </Text>
               </View>
 
@@ -213,6 +218,21 @@ export default function WelcomeScreen() {
                       autoCapitalize="none"
                       autoCorrect={false}
                       maxLength={20}
+                    />
+                  </View>
+                )}
+                {mode === 'signup' && (
+                  <View style={[styles.inputWrapper, { borderColor: theme.border }]}>
+                    <Ionicons name="ticket-outline" size={20} color={theme.textMuted} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { color: theme.textMain }]}
+                      placeholder="Invite Code"
+                      placeholderTextColor={theme.textMuted}
+                      value={inviteCode}
+                      onChangeText={(text) => setInviteCode(text.replace(/\s+/g, '').toUpperCase())}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      maxLength={16}
                     />
                   </View>
                 )}

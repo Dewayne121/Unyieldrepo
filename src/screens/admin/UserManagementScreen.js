@@ -7,19 +7,41 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   Image,
 } from 'react-native';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
 
 const REGIONS = ['Global', 'London', 'Manchester', 'Birmingham', 'Leeds', 'Glasgow'];
-const ACCOLADES = ['admin', 'community_support', 'beta', 'staff', 'verified_athlete', 'founding_member'];
+const ACCOLADES = ['admin', 'community_support', 'beta', 'staff', 'verified_athlete', 'founding_member', 'challenge_master'];
+
+// Accolade display labels
+const ACCOLADE_LABELS = {
+  admin: 'ADMIN',
+  community_support: 'SUPPORT',
+  beta: 'BETA TESTER',
+  staff: 'STAFF',
+  verified_athlete: 'VERIFIED ATHLETE',
+  founding_member: 'FOUNDER',
+  challenge_master: 'CHALLENGE MASTER',
+};
+
+const getAccoladeLabel = (accolade) => ACCOLADE_LABELS[accolade] || accolade.replace('_', ' ').toUpperCase();
 
 export default function UserManagementScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -79,7 +101,12 @@ export default function UserManagementScreen({ navigation }) {
       }
     } catch (err) {
       console.error('Error loading users:', err);
-      Alert.alert('Error', err.message || 'Failed to load users');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to load users',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,8 +176,8 @@ export default function UserManagementScreen({ navigation }) {
             <Text style={styles.userName}>{String(user.name || 'Unknown')}</Text>
             <View style={styles.userBadges}>
               {user.accolades?.map((accolade, index) => (
-                <View key={index} style={styles.accoladeBadge}>
-                  <Text style={styles.accoladeBadgeText}>{String(accolade)}</Text>
+                <View key={`${accolade}-${index}`} style={styles.accoladeBadge}>
+                  <Text style={styles.accoladeBadgeText}>{getAccoladeLabel(accolade)}</Text>
                 </View>
               ))}
             </View>
@@ -185,7 +212,7 @@ export default function UserManagementScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
+      <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -221,7 +248,7 @@ export default function UserManagementScreen({ navigation }) {
         style={styles.filtersScroll}
         contentContainerStyle={styles.filtersContent}
       >
-        <Text style={styles.filterLabel}>Region:</Text>
+        <Text style={styles.filterLabel}>Region</Text>
         {['all', ...REGIONS].map(region => (
           <FilterChip
             key={region}
@@ -232,11 +259,12 @@ export default function UserManagementScreen({ navigation }) {
           />
         ))}
 
-        <Text style={styles.filterLabel}>Accolade:</Text>
+        <View style={styles.filterDivider} />
+        <Text style={styles.filterLabel}>Accolade</Text>
         {['all', ...ACCOLADES].map(accolade => (
           <FilterChip
             key={accolade}
-            label={accolade === 'all' ? 'All' : accolade}
+            label={accolade === 'all' ? 'All' : getAccoladeLabel(accolade)}
             value={accolade}
             selected={selectedAccolade === accolade}
             onPress={() => setSelectedAccolade(accolade)}
@@ -246,7 +274,7 @@ export default function UserManagementScreen({ navigation }) {
 
       {/* Sort Options */}
       <View style={styles.sortContainer}>
-        <Text style={styles.sortLabel}>Sort by:</Text>
+        <Text style={styles.sortLabel}>Sort</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {[
             { field: 'createdAt', label: 'Join Date' },
@@ -327,207 +355,225 @@ export default function UserManagementScreen({ navigation }) {
           )}
         </ScrollView>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
+  container: ADMIN_SURFACES.page,
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: ADMIN_SPACING.xl,
+    paddingBottom: ADMIN_SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: ADMIN_COLORS.border,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: ADMIN_COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: ADMIN_SPACING.md,
+    borderWidth: 1,
+    borderColor: ADMIN_COLORS.border,
   },
   pageTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    ...ADMIN_TYPOGRAPHY.h2,
     flex: 1,
   },
   headerRight: {
-    width: 40,
+    width: 34,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    height: 48,
+    backgroundColor: ADMIN_COLORS.panel,
+    marginHorizontal: ADMIN_SPACING.xl,
+    marginTop: ADMIN_SPACING.md,
+    marginBottom: ADMIN_SPACING.sm,
+    paddingHorizontal: ADMIN_SPACING.md,
+    borderRadius: ADMIN_RADIUS.md,
+    height: 42,
+    borderWidth: 1,
+    borderColor: ADMIN_COLORS.border,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#fff',
+    fontSize: 13,
+    color: ADMIN_COLORS.text,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
+    fontWeight: '500',
   },
   clearButton: {
     padding: 4,
   },
   filtersScroll: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: ADMIN_SPACING.sm,
   },
   filtersContent: {
-    paddingRight: 16,
+    paddingHorizontal: ADMIN_SPACING.xl,
+    alignItems: 'center',
   },
   filterLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
+    ...ADMIN_TYPOGRAPHY.caption,
     marginRight: 8,
-    alignSelf: 'center',
+  },
+  filterDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: ADMIN_COLORS.borderSoft,
+    marginHorizontal: ADMIN_SPACING.sm,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#0f0f0f',
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: ADMIN_COLORS.card,
+    borderRadius: ADMIN_RADIUS.pill,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: ADMIN_COLORS.border,
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterChipSelected: {
-    backgroundColor: '#ff003c',
-    borderColor: '#ff003c',
+    backgroundColor: ADMIN_COLORS.accentSoft,
+    borderColor: ADMIN_COLORS.accent,
   },
   filterChipText: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: ADMIN_COLORS.textMuted,
     fontWeight: '600',
+    letterSpacing: 0.2,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
   },
   filterChipTextSelected: {
-    color: '#fff',
+    color: ADMIN_COLORS.accent,
   },
   sortContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: ADMIN_SPACING.xl,
+    paddingTop: ADMIN_SPACING.xs,
+    paddingBottom: ADMIN_SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: ADMIN_COLORS.border,
   },
   sortLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
+    ...ADMIN_TYPOGRAPHY.caption,
     marginRight: 8,
   },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#0f0f0f',
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: ADMIN_COLORS.panel,
+    borderRadius: ADMIN_RADIUS.pill,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: ADMIN_COLORS.border,
+    minHeight: 24,
   },
   sortOptionSelected: {
-    backgroundColor: 'rgba(255, 0, 60, 0.2)',
-    borderColor: '#ff003c',
+    backgroundColor: ADMIN_COLORS.accentSoft,
+    borderColor: ADMIN_COLORS.accent,
   },
   sortOptionText: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: ADMIN_COLORS.textMuted,
     fontWeight: '600',
     marginRight: 4,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
   },
   sortOptionTextSelected: {
-    color: '#ff003c',
+    color: ADMIN_COLORS.accent,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: ADMIN_SPACING.xl,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#888',
+    marginTop: ADMIN_SPACING.md,
+    ...ADMIN_TYPOGRAPHY.bodyMuted,
   },
   emptyText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+    marginTop: ADMIN_SPACING.md,
+    ...ADMIN_TYPOGRAPHY.h2,
   },
   emptySubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#888',
+    marginTop: ADMIN_SPACING.sm,
+    ...ADMIN_TYPOGRAPHY.bodyMuted,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingHorizontal: ADMIN_SPACING.xl,
+    paddingBottom: ADMIN_SPACING.xxl,
   },
   paginationInfo: {
-    paddingVertical: 12,
+    paddingVertical: ADMIN_SPACING.sm,
     alignItems: 'center',
   },
   paginationText: {
-    fontSize: 12,
-    color: '#888',
+    ...ADMIN_TYPOGRAPHY.bodyMuted,
   },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: ADMIN_COLORS.card,
+    borderRadius: ADMIN_RADIUS.lg,
+    padding: ADMIN_SPACING.md,
+    marginBottom: ADMIN_SPACING.md,
+    borderWidth: 1,
+    borderColor: ADMIN_COLORS.border,
+    ...ADMIN_SHADOWS.soft,
   },
   userAvatarContainer: {
-    marginRight: 12,
+    marginRight: ADMIN_SPACING.md,
   },
   userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   userAvatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: ADMIN_COLORS.accent,
   },
   userAvatarInitial: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: ADMIN_COLORS.white,
+    fontFamily: ADMIN_TYPOGRAPHY.title.fontFamily,
   },
   adminBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#0f0f0f',
+    borderColor: ADMIN_COLORS.card,
   },
   userInfo: {
     flex: 1,
@@ -536,76 +582,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+    flexWrap: 'wrap',
   },
   userName: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: ADMIN_COLORS.text,
     marginRight: 6,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
   },
   userBadges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   accoladeBadge: {
-    backgroundColor: '#222',
+    backgroundColor: ADMIN_COLORS.surface,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
     marginRight: 4,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: ADMIN_COLORS.borderSoft,
   },
   accoladeBadgeText: {
-    fontSize: 9,
-    color: '#888',
-    fontWeight: '600',
+    fontSize: 8,
+    color: ADMIN_COLORS.textSubtle,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
   userHandle: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: ADMIN_COLORS.textMuted,
     marginBottom: 4,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
   },
   userStats: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   userStatItem: {
-    fontSize: 11,
-    color: '#666',
+    fontSize: 10,
+    color: ADMIN_COLORS.textSubtle,
+    fontWeight: '600',
   },
   userStatSeparator: {
     fontSize: 10,
-    color: '#444',
+    color: ADMIN_COLORS.textSubtle,
     marginHorizontal: 6,
   },
   userRight: {
     alignItems: 'flex-end',
+    marginLeft: ADMIN_SPACING.sm,
   },
   userPoints: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ff003c',
+    color: ADMIN_COLORS.accent,
+    fontFamily: ADMIN_TYPOGRAPHY.body.fontFamily,
   },
   userPointsLabel: {
-    fontSize: 10,
-    color: '#888',
+    fontSize: 9,
+    color: ADMIN_COLORS.textSubtle,
+    letterSpacing: 1,
   },
   loadingMore: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: ADMIN_SPACING.lg,
   },
   loadingMoreText: {
-    marginLeft: 8,
-    fontSize: 12,
-    color: '#888',
+    marginLeft: ADMIN_SPACING.sm,
+    ...ADMIN_TYPOGRAPHY.bodyMuted,
   },
   endOfList: {
-    paddingVertical: 20,
+    paddingVertical: ADMIN_SPACING.lg,
     alignItems: 'center',
   },
   endOfListText: {
-    fontSize: 12,
-    color: '#666',
+    ...ADMIN_TYPOGRAPHY.caption,
   },
 });

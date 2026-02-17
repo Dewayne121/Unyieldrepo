@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
@@ -49,8 +49,10 @@ export function AuthProvider({ children }) {
       if (nextAppState === 'background' && !hasHandledBackground.current) {
         hasHandledBackground.current = true;
 
-        // Only check if user is authenticated
-        if (user) {
+        // Only check if user is authenticated AND still in onboarding flow.
+        // This prevents false account deletion when opening share sheets or other
+        // OS surfaces from the main app.
+        if (user && !onboardingCompleted) {
           const isAbandoned = await checkOnboardingAbandoned();
           console.log('App went to background, checking abandoned onboarding:', { isAbandoned, user: user?.username });
 
@@ -80,7 +82,7 @@ export function AuthProvider({ children }) {
     return () => {
       subscription?.remove();
     };
-  }, [user]);
+  }, [user, onboardingCompleted]);
 
   const loadUserData = async () => {
     try {
@@ -128,9 +130,37 @@ export function AuthProvider({ children }) {
             await api.clearAllAuthData();
           }
         } catch (error) {
-          // Token invalid or user deleted - clear all auth data
-          console.log('Auth error, clearing data:', error.message);
-          await api.clearAllAuthData();
+          // Only clear auth data for authentication errors (401/403)
+          // For network/timeout errors, keep the token and use cached data
+          const errorMessage = error.message || '';
+          const isAuthError = errorMessage.includes('401') ||
+                             errorMessage.includes('403') ||
+                             errorMessage.includes('Unauthorized') ||
+                             errorMessage.includes('invalid token') ||
+                             errorMessage.includes('not found');
+
+          if (isAuthError) {
+            console.log('Auth error, clearing data:', error.message);
+            await api.clearAllAuthData();
+          } else {
+            // Network/timeout error - try to use cached user data
+            console.log('Network error, using cached data:', error.message);
+            const cachedUserData = await AsyncStorage.getItem(LS_USER_DATA);
+            if (cachedUserData) {
+              try {
+                const parsedUser = JSON.parse(cachedUserData);
+                setUser(parsedUser);
+                const hasProfile = parsedUser.name && parsedUser.region && parsedUser.goal;
+                setOnboardingCompleted(hasProfile);
+              } catch (parseError) {
+                console.error('Failed to parse cached user data');
+                await api.clearAllAuthData();
+              }
+            } else {
+              // No cached data available - clear auth
+              await api.clearAllAuthData();
+            }
+          }
         }
       } else {
         // No token - check BOTH onboarding flags for anonymous/demo
@@ -141,8 +171,18 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      // On any error, clear auth data to allow fresh start
-      await api.clearAllAuthData();
+      // Only clear auth data for critical errors, not network issues
+      const errorMessage = error.message || '';
+      const isCriticalError = errorMessage.includes('401') ||
+                             errorMessage.includes('403') ||
+                             errorMessage.includes('Unauthorized') ||
+                             errorMessage.includes('SyntaxError') ||
+                             errorMessage.includes('parse');
+
+      if (isCriticalError) {
+        await api.clearAllAuthData();
+      }
+      // For other errors (network, timeout), keep auth state and try again later
     } finally {
       setLoading(false);
     }
@@ -157,7 +197,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signInWithEmail = async (email, password) => {
+  const signInWithEmail = useCallback(async (email, password) => {
     setAuthError(null);
     try {
       if (!email || !password) {
@@ -210,51 +250,54 @@ export function AuthProvider({ children }) {
       setAuthError(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
 
-  const signUpWithEmail = async (email, password, username) => {
-    setAuthError(null);
-    try {
-      if (!email || !password || !username) {
-        const message = 'Please fill in all fields';
+  const signUpWithEmail = useCallback(
+    async function signUpWithEmail(email, password, username, inviteCode) {
+      setAuthError(null);
+      try {
+        if (!email || !password || !username || !inviteCode) {
+          const message = 'Please fill in all fields';
+          setAuthError(message);
+          return { success: false, error: message };
+        }
+
+        if (username.length < 3 || username.length > 20) {
+          const message = 'Username must be 3-20 characters';
+          setAuthError(message);
+          return { success: false, error: message };
+        }
+
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+          const message = 'Username can only contain letters, numbers, and underscores';
+          setAuthError(message);
+          return { success: false, error: message };
+        }
+
+        if (password.length < 6) {
+          const message = 'Password must be at least 6 characters';
+          setAuthError(message);
+          return { success: false, error: message };
+        }
+
+        const response = await api.register(email, password, username, inviteCode);
+
+        if (response.success && response.data?.user) {
+          // Clear any previous onboarding data for fresh start
+          await resetOnboardingForNewUser();
+          await saveUserData(response.data.user);
+          return { success: true, user: response.data.user };
+        }
+
+        throw new Error('Registration failed');
+      } catch (error) {
+        const message = error.message || 'Registration failed';
         setAuthError(message);
         return { success: false, error: message };
       }
-
-      if (username.length < 3 || username.length > 20) {
-        const message = 'Username must be 3-20 characters';
-        setAuthError(message);
-        return { success: false, error: message };
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        const message = 'Username can only contain letters, numbers, and underscores';
-        setAuthError(message);
-        return { success: false, error: message };
-      }
-
-      if (password.length < 6) {
-        const message = 'Password must be at least 6 characters';
-        setAuthError(message);
-        return { success: false, error: message };
-      }
-
-      const response = await api.register(email, password, username);
-
-      if (response.success && response.data?.user) {
-        // Clear any previous onboarding data for fresh start
-        await resetOnboardingForNewUser();
-        await saveUserData(response.data.user);
-        return { success: true, user: response.data.user };
-      }
-
-      throw new Error('Registration failed');
-    } catch (error) {
-      const message = error.message || 'Registration failed';
-      setAuthError(message);
-      return { success: false, error: message };
-    }
-  };
+    },
+    []
+  );
 
   const signInWithGoogle = async () => {
     const message = 'Google sign-in is not available yet. Please use email/password or continue anonymously.';
@@ -288,7 +331,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     setAuthError(null);
     try {
       await api.logout();
@@ -303,9 +346,9 @@ export function AuthProvider({ children }) {
       setAuthError(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
 
-  const deleteAccount = async () => {
+  const deleteAccount = useCallback(async () => {
     setAuthError(null);
     try {
       await api.deleteAccount();
@@ -318,7 +361,7 @@ export function AuthProvider({ children }) {
       setAuthError(message);
       return { success: false, error: message };
     }
-  };
+  }, []);
 
   const checkUsername = async (username) => {
     try {
@@ -329,7 +372,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const updateUserProfile = async (updates) => {
+  const updateUserProfile = useCallback(async (updates) => {
     if (!user) return { success: false, error: 'No user logged in' };
 
     try {
@@ -351,9 +394,9 @@ export function AuthProvider({ children }) {
     } catch (error) {
       return { success: false, error: error.message };
     }
-  };
+  }, [user]);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       console.log('AuthContext: Refreshing user data...');
       const response = await api.getMe();
@@ -372,7 +415,7 @@ export function AuthProvider({ children }) {
       console.error('Error refreshing user:', error);
     }
     return null;
-  };
+  }, []);
 
   const setOnboardingComplete = async () => {
     try {

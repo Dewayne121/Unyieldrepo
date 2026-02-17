@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,25 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   StatusBar,
+  Linking,
+  AppState,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
 import { EXERCISES } from '../constants/exercises';
 import { Colors, Spacing, Typography, BorderRadius, Shadows } from '../constants/colors';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 // Helper component for form sections - Operator Style
-const FormSection = ({ title, children, required, theme }) => (
+const FormSection = ({ title, children, required, theme, styles }) => (
   <View style={styles.sectionContainer}>
     <View style={styles.sectionHeader}>
       <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</Text>
@@ -36,7 +39,9 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { challenge } = route.params;
+  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const cameraRef = useRef(null);
 
   const [selectedExercise, setSelectedExercise] = useState(null);
@@ -47,8 +52,13 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
   const [videoUri, setVideoUri] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const recordingTimeRef = useRef(0);
+  const recordStartRef = useRef(0);
   const [facing, setFacing] = useState('back');
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraKey, setCameraKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [showExerciseSelector, setShowExerciseSelector] = useState(false);
   const [videoSource, setVideoSource] = useState('camera');
@@ -56,38 +66,287 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
   const [blurring, setBlurring] = useState(false); 
 
   const recordingTimerRef = useRef(null);
+  const recordingRef = useRef(false);
+  const startRecordingLockRef = useRef(false);
+  const cameraBootTimeoutRef = useRef(null);
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const styles = createStyles(theme);
 
   const availableExercises = challenge?.challengeType === 'exercise'
     ? EXERCISES.filter(ex => challenge.exercises?.includes(ex.id))
     : EXERCISES;
 
-  const startRecording = async () => {
-    if (!cameraRef.current) return;
-    try {
-      setRecording(true);
+  const resetCamera = useCallback(() => {
+    setCameraError('');
+    setCameraReady(false);
+    setCameraKey(prev => prev + 1);
+  }, []);
+
+  const handleCameraReady = useCallback(() => {
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+      cameraBootTimeoutRef.current = null;
+    }
+    setCameraReady(true);
+    setCameraError('');
+  }, []);
+
+  const handleCameraError = useCallback((error) => {
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+      cameraBootTimeoutRef.current = null;
+    }
+    setCameraReady(false);
+    setCameraError(error?.message || 'Camera unavailable.');
+  }, []);
+
+  const openSettings = () => {
+    Linking.openSettings().catch(() => {});
+  };
+
+  const ensureCameraPermission = async () => {
+    if (permission?.granted) return true;
+    const result = await requestPermission();
+    if (result.granted) return true;
+    showAlert({
+      title: 'Camera Permission',
+      message: 'Camera access is needed to record video. You can still upload from your gallery.',
+      icon: 'warning',
+      buttons: [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Open Settings', style: 'default', onPress: openSettings },
+      ]
+    });
+    return false;
+  };
+
+  const ensureMicrophonePermission = async () => {
+    if (micPermission?.granted) return true;
+    const result = await requestMicPermission();
+    if (result.granted) return true;
+    showAlert({
+      title: 'Microphone Disabled',
+      message: 'Your video will record without audio.',
+      icon: 'info',
+      buttons: [{ text: 'OK', style: 'default' }]
+    });
+    return false;
+  };
+
+  const resolveDurationSeconds = (durationValue) => {
+    const duration = typeof durationValue === 'number' ? durationValue : 0;
+    if (!duration) return 0;
+    return duration > 1000 ? Math.round(duration / 1000) : Math.round(duration);
+  };
+
+  const applyVideoSelection = (uri, durationSeconds, source) => {
+    if (!uri) return false;
+    if (durationSeconds < 5) {
+      showAlert({
+        title: 'Video Too Short',
+        message: 'Video must be at least 5 seconds long. Please try again.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+      setVideoUri(null);
       setRecordingTime(0);
-      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-      const video = await cameraRef.current.recordAsync({ quality: '480p', maxDuration: 60 });
-      clearInterval(recordingTimerRef.current);
-      setVideoUri(video.uri);
-      setRecording(false);
-      setCameraActive(false);
-      setVideoSource('camera');
+      recordingTimeRef.current = 0;
+      return false;
+    }
+    setVideoUri(uri);
+    setRecordingTime(durationSeconds);
+    recordingTimeRef.current = durationSeconds;
+    setVideoSource(source);
+    setRecording(false);
+    setCameraActive(false);
+    return true;
+  };
+
+  const recordWithSystemCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please allow camera access to record a video.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        videoQuality: 1,
+        videoMaxDuration: 60,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const durationSeconds = resolveDurationSeconds(asset.duration);
+        applyVideoSelection(asset.uri, durationSeconds || 5, 'camera');
+      }
     } catch (error) {
-      setRecording(false);
-      clearInterval(recordingTimerRef.current);
-      Alert.alert('Error', 'Failed to record video');
+      console.error('Error recording with system camera:', error);
+      showAlert({
+        title: 'Error',
+        message: 'Failed to record video. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
-  const stopRecording = () => cameraRef.current?.stopRecording();
+  const openCamera = async () => {
+    const hasPermission = await ensureCameraPermission();
+    if (!hasPermission) return;
+    // Reliability-first path: system camera is consistently more stable for challenge capture.
+    await recordWithSystemCamera();
+  };
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  const stopRecordingSafely = useCallback(async () => {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    try {
+      await cameraRef.current?.stopRecording();
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+    } finally {
+      setRecording(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!cameraActive) return;
+    resetCamera();
+  }, [cameraActive, resetCamera]);
+
+  useEffect(() => {
+    if (!cameraActive || !permission?.granted || !isFocused) return;
+    if (cameraBootTimeoutRef.current) {
+      clearTimeout(cameraBootTimeoutRef.current);
+    }
+    cameraBootTimeoutRef.current = setTimeout(() => {
+      setCameraError(prev => prev || 'Camera failed to start. Try again or use system camera.');
+    }, 6000);
+    return () => {
+      if (cameraBootTimeoutRef.current) {
+        clearTimeout(cameraBootTimeoutRef.current);
+        cameraBootTimeoutRef.current = null;
+      }
+    };
+  }, [cameraActive, permission?.granted, isFocused, cameraKey]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      // iOS can briefly enter `inactive` during transient UI events; do not abort recording for that.
+      if (nextState === 'background' && recordingRef.current) {
+        stopRecordingSafely();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [stopRecordingSafely]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      startRecordingLockRef.current = false;
+      recordingRef.current = false;
+    };
+  }, []);
+
+  const startRecording = async () => {
+    if (recordingRef.current || startRecordingLockRef.current) return;
+    startRecordingLockRef.current = true;
+
+    const hasCameraPermission = await ensureCameraPermission();
+    if (!hasCameraPermission) {
+      startRecordingLockRef.current = false;
+      return;
+    }
+
+    const micAllowed = await ensureMicrophonePermission();
+    if (!cameraRef.current || !cameraReady || cameraError) {
+      await recordWithSystemCamera();
+      startRecordingLockRef.current = false;
+      return;
+    }
+
+    try {
+      setRecording(true);
+      recordingRef.current = true;
+      setRecordingTime(0);
+      recordingTimeRef.current = 0;
+      recordStartRef.current = Date.now();
+      recordingTimerRef.current = setInterval(() => {
+        recordingTimeRef.current += 1;
+        setRecordingTime(recordingTimeRef.current);
+      }, 1000);
+
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: 60,
+        maxFileSize: 100 * 1024 * 1024,
+        mute: !micAllowed,
+      });
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      recordingRef.current = false;
+      const durationSeconds = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000));
+      const applied = applyVideoSelection(video?.uri, durationSeconds, 'camera');
+      if (!applied) {
+        setRecording(false);
+        // Resetting camera helps recover preview on devices that pause/freeze after short recordings.
+        resetCamera();
+      }
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      recordingRef.current = false;
+      setRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      showAlert({
+        title: 'Error',
+        message: 'Failed to record video. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    } finally {
+      startRecordingLockRef.current = false;
+    }
+  };
+
+  const stopRecording = () => {
+    stopRecordingSafely();
+  };
 
   const pickVideoFromGallery = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        return Alert.alert('Permission Required', 'Please grant permission to access your photo library to select a video.');
+        return showAlert({
+          title: 'Permission Required',
+          message: 'Please grant permission to access your photo library to select a video.',
+          icon: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -98,30 +357,37 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        const durationSeconds = Math.floor(asset.duration || 0);
-
-        if (durationSeconds < 5) {
-          Alert.alert(
-            'Video Too Short',
-            'Video must be at least 5 seconds long. Please select a longer video or record a new one.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        setVideoUri(asset.uri);
-        setRecordingTime(durationSeconds);
-        setVideoSource('gallery');
+        const durationSeconds = resolveDurationSeconds(asset.duration);
+        applyVideoSelection(asset.uri, durationSeconds || 5, 'gallery');
       }
     } catch (error) {
       console.error('Error picking video:', error);
-      Alert.alert('Error', 'Failed to pick video from gallery. Please try again.');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to pick video from gallery. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
   const handleSubmit = async () => {
-    if (challenge?.challengeType === 'exercise' && !selectedExercise) return Alert.alert('Missing Info', 'Select exercise');
-    if (!videoUri) return Alert.alert('Proof Required', 'Record or upload video');
+    if (challenge?.challengeType === 'exercise' && !selectedExercise) {
+      return showAlert({
+        title: 'Missing Info',
+        message: 'Please select an exercise.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
+    if (!videoUri) {
+      return showAlert({
+        title: 'Proof Required',
+        message: 'Please record or upload a video.',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    }
 
     try {
       setSubmitting(true);
@@ -130,13 +396,19 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
       if (!uploadResponse.success) throw new Error('Upload failed');
 
       let finalVideoUrl = uploadResponse.data.videoUrl;
+      let finalServerVideoId = uploadResponse.data.objectName;
+      let originalVideoUrl = null; // Store original for admin view
 
       if (blurFaces) {
         setBlurring(true);
         try {
           const blurResponse = await api.blurVideo(finalVideoUrl);
           if (blurResponse.success && blurResponse.data?.blurredVideoUrl) {
+            originalVideoUrl = blurResponse.data.originalVideoUrl || finalVideoUrl;
             finalVideoUrl = blurResponse.data.blurredVideoUrl;
+            if (blurResponse.data?.objectName) {
+              finalServerVideoId = blurResponse.data.objectName;
+            }
           }
         } catch (blurError) {
           console.warn('[SUBMIT] Blur error:', blurError.message);
@@ -153,22 +425,37 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
         default: value = 1;
       }
 
-      const response = await api.submitChallengeEntry(challenge._id, {
+      const challengeId = challenge?.id || challenge?._id;
+      if (!challengeId) {
+        throw new Error('Challenge ID is missing.');
+      }
+      const response = await api.submitChallengeEntry(challengeId, {
         exercise: selectedExercise?.id,
         reps: parseInt(reps) || 0,
         weight: parseFloat(weight) || 0,
         duration: parseInt(duration) || 0,
         videoUrl: finalVideoUrl,
-        serverVideoId: uploadResponse.data.objectName,
+        originalVideoUrl: originalVideoUrl, // Original unblurred URL (admin only)
+        serverVideoId: finalServerVideoId,
         value,
         notes: notes.trim(),
       });
 
       if (response.success) {
-        Alert.alert('Success', 'Entry submitted!', [{ text: 'Done', onPress: () => navigation.goBack() }]);
+        showAlert({
+          title: 'Entry Submitted',
+          message: 'Your entry is now pending admin approval. XP will be confirmed once verified.',
+          icon: 'success',
+          buttons: [{ text: 'Done', style: 'default', onPress: () => navigation.goBack() }]
+        });
       }
     } catch (err) {
-      Alert.alert('Error', err.message);
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to submit entry. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setSubmitting(false);
     }
@@ -183,7 +470,59 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
   if (cameraActive) {
     return (
       <View style={styles.fullScreenCamera}>
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mode="video" />
+        {permission?.granted ? (
+          <>
+            <CameraView
+              key={cameraKey}
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing={facing}
+              mode="video"
+              videoQuality="480p"
+              mute={!micPermission?.granted}
+              active={cameraActive && isFocused}
+              onCameraReady={handleCameraReady}
+              onMountError={handleCameraError}
+            />
+            {!cameraReady && !cameraError && (
+              <View style={styles.cameraOverlay}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.cameraOverlayText}>STARTING CAMERA...</Text>
+              </View>
+            )}
+            {!!cameraError && (
+              <View style={styles.cameraErrorOverlay}>
+                <Ionicons name="alert-circle-outline" size={36} color="#fff" />
+                <Text style={styles.cameraErrorTitle}>CAMERA UNAVAILABLE</Text>
+                <Text style={styles.cameraErrorText}>{cameraError}</Text>
+                <View style={styles.cameraErrorActions}>
+                  <TouchableOpacity onPress={resetCamera} style={styles.cameraErrorButton}>
+                    <Text style={styles.cameraErrorButtonText}>RETRY</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={recordWithSystemCamera} style={styles.cameraErrorButtonAlt}>
+                    <Text style={styles.cameraErrorButtonAltText}>USE SYSTEM CAMERA</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.cameraPermissionGate}>
+            <Ionicons name="videocam-outline" size={48} color="#fff" />
+            <Text style={styles.cameraPermissionTitle}>CAMERA ACCESS NEEDED</Text>
+            <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+              <Text style={styles.permissionButtonText}>ENABLE CAMERA</Text>
+            </TouchableOpacity>
+            {!permission?.canAskAgain && (
+              <TouchableOpacity onPress={openSettings} style={styles.permissionButtonSecondary}>
+                <Text style={styles.permissionButtonSecondaryText}>OPEN SETTINGS</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={recordWithSystemCamera} style={styles.permissionButtonSecondary}>
+              <Text style={styles.permissionButtonSecondaryText}>USE SYSTEM CAMERA</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={[styles.cameraHeader, { paddingTop: insets.top + 10 }]}>
             <TouchableOpacity onPress={() => setCameraActive(false)} style={styles.cameraCloseButton}>
                 <Ionicons name="close" size={28} color="#fff" />
@@ -194,6 +533,13 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
                     <Text style={styles.recordingTime}>{formatTime(recordingTime)}</Text>
                 </View>
             )}
+            <TouchableOpacity
+                onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+                style={styles.cameraFlipButton}
+                disabled={recording}
+            >
+                <Ionicons name="camera-reverse" size={28} color="#fff" />
+            </TouchableOpacity>
         </View>
         <View style={styles.cameraFooter}>
             <TouchableOpacity style={styles.recordButtonOuter} onPress={recording ? stopRecording : startRecording}>
@@ -243,7 +589,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
         </View>
 
         {/* Media Selection */}
-        <FormSection title="EVIDENCE" required theme={theme}>
+        <FormSection title="EVIDENCE" required theme={theme} styles={styles}>
             {videoUri ? (
                 <View style={styles.videoSuccessBox}>
                     <View style={[styles.videoSuccessIndicator, { backgroundColor: theme.success }]} />
@@ -258,7 +604,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
                 </View>
             ) : (
                 <View style={styles.mediaRow}>
-                    <TouchableOpacity style={[styles.mediaBtn, { borderColor: theme.border }]} onPress={() => setCameraActive(true)}>
+                    <TouchableOpacity style={[styles.mediaBtn, { borderColor: theme.border }]} onPress={openCamera}>
                         <View style={styles.mediaBtnGradient}>
                             <Ionicons name="videocam" size={28} color={theme.primary} />
                             <Text style={styles.mediaBtnText}>RECORD</Text>
@@ -277,7 +623,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
         {/* Form Fields */}
         <View style={styles.formPanel}>
             {challenge?.challengeType === 'exercise' && (
-                <FormSection title="EXERCISE" required theme={theme}>
+                <FormSection title="EXERCISE" required theme={theme} styles={styles}>
                     <TouchableOpacity style={styles.operatorInput} onPress={() => setShowExerciseSelector(true)}>
                         <Text style={[styles.inputText, !selectedExercise && { color: theme.textMuted }]}>
                             {selectedExercise ? selectedExercise.name.toUpperCase() : "SELECT UNIT"}
@@ -290,7 +636,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
             <View style={styles.row}>
                 {(challenge?.metricType === 'reps' || challenge?.metricType === 'weight') && (
                     <View style={{flex: 1, marginRight: 8}}>
-                        <FormSection title="REPS" required={challenge?.metricType === 'reps'} theme={theme}>
+                        <FormSection title="REPS" required={challenge?.metricType === 'reps'} theme={theme} styles={styles}>
                             <TextInput
                                 style={styles.operatorInput}
                                 placeholder="0"
@@ -304,7 +650,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
                 )}
                 {challenge?.metricType === 'weight' && (
                     <View style={{flex: 1, marginLeft: 8}}>
-                        <FormSection title="WEIGHT (KG)" required theme={theme}>
+                        <FormSection title="WEIGHT (KG)" required theme={theme} styles={styles}>
                             <TextInput
                                 style={styles.operatorInput}
                                 placeholder="0.0"
@@ -319,7 +665,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
             </View>
 
             {challenge?.metricType === 'duration' && (
-                <FormSection title="DURATION (SEC)" required theme={theme}>
+                <FormSection title="DURATION (SEC)" required theme={theme} styles={styles}>
                     <TextInput
                         style={styles.operatorInput}
                         placeholder="0"
@@ -331,7 +677,7 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
                 </FormSection>
             )}
 
-            <FormSection title="COMMS / NOTES" theme={theme}>
+            <FormSection title="COMMS / NOTES" theme={theme} styles={styles}>
                 <TextInput
                     style={[styles.operatorInput, styles.textArea]}
                     placeholder="OPTIONAL INTEL..."
@@ -419,6 +765,9 @@ export default function ChallengeSubmissionScreen({ navigation, route }) {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
@@ -469,8 +818,115 @@ function createStyles(theme) {
       blurToggleText: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginLeft: 8 },
 
       fullScreenCamera: { flex: 1, backgroundColor: '#000' },
-      cameraHeader: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 },
+      cameraOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.35)',
+      },
+      cameraOverlayText: {
+        marginTop: 8,
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#fff',
+        letterSpacing: 1,
+      },
+      cameraErrorOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+      },
+      cameraErrorTitle: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 1.2,
+      },
+      cameraErrorText: {
+        marginTop: 8,
+        fontSize: 11,
+        fontWeight: '600',
+        color: 'rgba(255,255,255,0.7)',
+        textAlign: 'center',
+      },
+      cameraErrorActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 16,
+      },
+      cameraErrorButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+        backgroundColor: '#fff',
+      },
+      cameraErrorButtonText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#000',
+        letterSpacing: 1,
+      },
+      cameraErrorButtonAlt: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+      },
+      cameraErrorButtonAltText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 1,
+      },
+      cameraPermissionGate: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+        backgroundColor: '#000',
+      },
+      cameraPermissionTitle: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 1.2,
+      },
+      permissionButton: {
+        marginTop: 18,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 8,
+        backgroundColor: '#fff',
+      },
+      permissionButtonText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#000',
+        letterSpacing: 1,
+      },
+      permissionButtonSecondary: {
+        marginTop: 10,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+      },
+      permissionButtonSecondaryText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 1,
+      },
+      cameraHeader: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 },
       cameraCloseButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+      cameraFlipButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
       recordingIndicator: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
       redDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', marginRight: 6 },
       recordingTime: { color: '#fff', fontWeight: '800', fontSize: 12 },

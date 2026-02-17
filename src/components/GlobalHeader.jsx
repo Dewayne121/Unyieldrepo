@@ -4,27 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
-
-// League tiers - matching the leaderboard system
-const LEAGUES = [
-  { name: 'UNYIELD', minPoints: 10000, icon: '💀', color: '#9b2c2c' },
-  { name: 'ELITE', minPoints: 5000, icon: '👑', color: '#ffd700' },
-  { name: 'DIAMOND', minPoints: 2500, icon: '💎', color: '#00bcd4' },
-  { name: 'PLATINUM', minPoints: 1500, icon: '⚪', color: '#e0e0e0' },
-  { name: 'GOLD', minPoints: 800, icon: '🏅', color: '#ffd700' },
-  { name: 'SILVER', minPoints: 400, icon: '🥈', color: '#c0c0c0' },
-  { name: 'BRONZE', minPoints: 100, icon: '🥉', color: '#cd7f32' },
-  { name: 'IRON', minPoints: 0, icon: '🔩', color: '#7f8c8d' },
-];
-
-const getUserLeague = (points) => {
-  for (const league of LEAGUES) {
-    if (points >= league.minPoints) return league;
-  }
-  return LEAGUES[LEAGUES.length - 1];
-};
-
-const XP_PER_LEVEL = 500;
+import { getUserTier, getTierProgress } from '../constants/tiers';
 
 export default function GlobalHeader() {
   const insets = useSafeAreaInsets();
@@ -34,14 +14,11 @@ export default function GlobalHeader() {
 
   if (!user) return null;
 
-  // Calculate level and XP progress
-  const totalXp = Number(user?.totalPoints || 0);
-  const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
-  const xpInCurrentLevel = totalXp % XP_PER_LEVEL;
-  const xpProgress = (xpInCurrentLevel / XP_PER_LEVEL) * 100;
+  const totalPoints = Number(user?.totalPoints || 0);
 
-  // Get current league
-  const currentLeague = getUserLeague(totalXp);
+  // Get current tier and progress
+  const currentTier = getUserTier(totalPoints);
+  const tierProgress = getTierProgress(totalPoints);
 
   const displayName = user?.name || 'Grinder';
   const profileImage = user?.profileImage;
@@ -52,7 +29,7 @@ export default function GlobalHeader() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
-      {/* Top Row: Profile, Name, League */}
+      {/* Top Row: Profile, Name, Tier */}
       <View style={styles.topRow}>
         <TouchableOpacity
           onPress={handleProfilePress}
@@ -72,28 +49,35 @@ export default function GlobalHeader() {
 
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{displayName}</Text>
-          <Text style={styles.userRank}>OPERATOR</Text>
+          <Text style={[styles.userTier, { color: currentTier.color }]}>
+            {currentTier.name}
+          </Text>
         </View>
 
-        <View style={[styles.leagueBadge, { borderColor: currentLeague.color }]}>
-          <Text style={styles.leagueIcon}>{currentLeague.icon}</Text>
-          <Text style={[styles.leagueText, { color: currentLeague.color }]}>
-            {currentLeague.name}
-          </Text>
+        <View style={styles.tierBadgeContainer}>
+          <Image
+            source={currentTier.image}
+            style={styles.tierBadgeImage}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
-      {/* Bottom Row: Level & XP Bar */}
+      {/* Bottom Row: Progress to next tier */}
       <View style={styles.progressRow}>
-        <View style={styles.levelBadge}>
-          <Text style={styles.levelText}>LVL {level}</Text>
+        <View style={[styles.progressLabel, { backgroundColor: currentTier.color }]}>
+          <Text style={styles.progressLabelText}>{totalPoints} XP</Text>
         </View>
         <View style={styles.xpTrack}>
-          <View style={[styles.xpFill, { width: `${xpProgress}%` }]} />
+          <View style={[styles.xpFill, { width: `${tierProgress.percentage}%`, backgroundColor: currentTier.color }]} />
         </View>
-        <Text style={styles.xpLabel}>
-          {xpInCurrentLevel} / {XP_PER_LEVEL} XP
-        </Text>
+        {tierProgress.nextTier ? (
+          <Text style={styles.xpLabel}>
+            {tierProgress.current} / {tierProgress.target} XP
+          </Text>
+        ) : (
+          <Text style={styles.xpLabel}>MAX TIER</Text>
+        )}
       </View>
     </View>
   );
@@ -147,45 +131,45 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 2,
   },
-  userRank: {
+  userTier: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#888',
+    fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  leagueBadge: {
-    flexDirection: 'row',
+  tierBadgeContainer: {
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    gap: 6,
+    justifyContent: 'center',
+    width: 40,
+    height: 40,
   },
-  leagueIcon: {
-    fontSize: 12,
+  tierBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  leagueText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+  tierBadgeImage: {
+    width: 40,
+    height: 40,
+  },
+  tierIcon: {
+    fontSize: 16,
   },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  levelBadge: {
-    backgroundColor: '#1a1a1a',
+  progressLabel: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
-  levelText: {
+  progressLabelText: {
     fontSize: 10,
     fontWeight: '800',
     color: '#fff',
@@ -200,7 +184,6 @@ const styles = StyleSheet.create({
   },
   xpFill: {
     height: '100%',
-    backgroundColor: '#9b2c2c',
     borderRadius: 3,
   },
   xpLabel: {

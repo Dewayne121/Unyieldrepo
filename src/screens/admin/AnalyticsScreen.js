@@ -3,8 +3,20 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions } fro
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 export default function AnalyticsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -36,7 +48,7 @@ export default function AnalyticsScreen({ navigation }) {
           <Text style={styles.pageTitle}>Analytics</Text>
         </View>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#ff003c" />
+          <ActivityIndicator size="large" color={C.accent} />
         </View>
       </View>
     );
@@ -79,10 +91,10 @@ export default function AnalyticsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>User Metrics</Text>
           <View style={styles.statsGrid}>
-            <StatCard title="Total Users" value={stats?.users?.total} subtitle={`+${stats?.users?.newToday} today`} icon="people" color="#ff003c" />
-            <StatCard title="Active Users" value={stats?.users?.active} subtitle="Last 7 days" icon="person" color="#00d4aa" />
-            <StatCard title="New This Week" value={stats?.users?.newWeek} subtitle="Registrations" icon="person-add" color="#ff9500" />
-            <StatCard title="New This Month" value={stats?.users?.newMonth} subtitle="Registrations" icon="calendar" color="#5856d6" />
+            <StatCard title="Total Users" value={stats?.users?.total} subtitle={`+${stats?.users?.newToday} today`} icon="people" color={C.accent} />
+            <StatCard title="Active Users" value={stats?.users?.active} subtitle="Last 7 days" icon="person" color={C.success} />
+            <StatCard title="New This Week" value={stats?.users?.newWeek} subtitle="Registrations" icon="person-add" color={C.warning} />
+            <StatCard title="New This Month" value={stats?.users?.newMonth} subtitle="Registrations" icon="calendar" color={C.info} />
           </View>
         </View>
 
@@ -90,9 +102,9 @@ export default function AnalyticsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Workout Metrics</Text>
           <View style={styles.statsGrid}>
-            <StatCard title="Total Workouts" value={stats?.workouts?.total} subtitle={`+${stats?.workouts?.today} today`} icon="fitness" color="#00d4aa" />
-            <StatCard title="This Week" value={stats?.workouts?.week} subtitle="Workouts logged" icon="barbell" color="#ffcc00" />
-            <StatCard title="This Month" value={stats?.workouts?.month} subtitle="Workouts logged" icon="calendar" color="#32ade6" />
+            <StatCard title="Total Workouts" value={stats?.workouts?.total} subtitle={`+${stats?.workouts?.today} today`} icon="fitness" color={C.success} />
+            <StatCard title="This Week" value={stats?.workouts?.week} subtitle="Workouts logged" icon="barbell" color={C.warning} />
+            <StatCard title="This Month" value={stats?.workouts?.month} subtitle="Workouts logged" icon="calendar" color={C.info} />
           </View>
         </View>
 
@@ -100,10 +112,10 @@ export default function AnalyticsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Video Verification</Text>
           <View style={styles.statsGrid}>
-            <StatCard title="Total Videos" value={stats?.videos?.total} subtitle="All time" icon="videocam" color="#5856d6" />
-            <StatCard title="Pending" value={stats?.videos?.pending} subtitle="Awaiting review" icon="time" color="#ff9500" />
-            <StatCard title="Approved" value={stats?.videos?.approved} subtitle={`${((stats?.videos?.approved || 0) / Math.max(stats?.videos?.total || 1, 1) * 100).toFixed(0)}% rate`} icon="checkmark-circle" color="#34c759" />
-            <StatCard title="Rejected" value={stats?.videos?.rejected} subtitle={`${((stats?.videos?.rejected || 0) / Math.max(stats?.videos?.total || 1, 1) * 100).toFixed(0)}% rate`} icon="close-circle" color="#ff3b30" />
+            <StatCard title="Total Videos" value={stats?.videos?.total} subtitle="All time" icon="videocam" color={C.info} />
+            <StatCard title="Pending" value={stats?.videos?.pending} subtitle="Awaiting review" icon="time" color={C.warning} />
+            <StatCard title="Approved" value={stats?.videos?.approved} subtitle={`${((stats?.videos?.approved || 0) / Math.max(stats?.videos?.total || 1, 1) * 100).toFixed(0)}% rate`} icon="checkmark-circle" color={C.success} />
+            <StatCard title="Rejected" value={stats?.videos?.rejected} subtitle={`${((stats?.videos?.rejected || 0) / Math.max(stats?.videos?.total || 1, 1) * 100).toFixed(0)}% rate`} icon="close-circle" color={C.danger} />
           </View>
         </View>
 
@@ -111,8 +123,8 @@ export default function AnalyticsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Moderation Queue</Text>
           <View style={styles.statsGrid}>
-            <StatCard title="Pending Reports" value={stats?.moderation?.pendingReports} subtitle="Need review" icon="flag" color="#ff3b30" />
-            <StatCard title="Pending Appeals" value={stats?.moderation?.pendingAppeals} subtitle="Need review" icon="refresh" color="#ff9500" />
+            <StatCard title="Pending Reports" value={stats?.moderation?.pendingReports} subtitle="Need review" icon="flag" color={C.danger} />
+            <StatCard title="Pending Appeals" value={stats?.moderation?.pendingAppeals} subtitle="Need review" icon="refresh" color={C.warning} />
           </View>
         </View>
 
@@ -120,8 +132,8 @@ export default function AnalyticsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Points System</Text>
           <View style={styles.statsGrid}>
-            <StatCard title="Total Awarded" value={stats?.points?.totalAwarded} subtitle="All time" icon="trophy" color="#ffcc00" />
-            <StatCard title="Today" value={stats?.points?.today} subtitle="Points awarded" icon="star" color="#32ade6" />
+            <StatCard title="Total Awarded" value={stats?.points?.totalAwarded} subtitle="All time" icon="trophy" color={C.warning} />
+            <StatCard title="Today" value={stats?.points?.today} subtitle="Points awarded" icon="star" color={C.info} />
           </View>
         </View>
 
@@ -174,7 +186,7 @@ export default function AnalyticsScreen({ navigation }) {
             <View style={styles.barChartContainer}>
               {stats.regionDistribution.map((item, index) => {
                 const maxValue = Math.max(...stats.regionDistribution.map(r => r.count));
-                const colors = ['#ff003c', '#00d4aa', '#ff9500', '#5856d6', '#32ade6', '#ff3b30'];
+                const colors = [C.accent, C.success, C.warning, C.info, '#4C8DFF', C.danger];
                 return (
                   <ChartBar
                     key={index}
@@ -210,37 +222,82 @@ export default function AnalyticsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505' },
-  header: { paddingHorizontal: 24, paddingBottom: 16 },
-  pageTitle: { fontSize: 20, fontWeight: '700', color: '#fff', letterSpacing: 1 },
+  container: ADMIN_SURFACES.page,
+  header: { paddingHorizontal: S.xl, paddingBottom: S.md },
+  pageTitle: { ...T.title },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
-  section: { paddingHorizontal: 20, marginBottom: 32 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16, letterSpacing: 0.5 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 },
-  statCard: { width: (SCREEN_WIDTH - 64) / 2, marginHorizontal: 8, backgroundColor: '#0f0f0f', borderRadius: 12, padding: 16, marginBottom: 16, alignItems: 'center' },
-  statIconContainer: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  statValue: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  statTitle: { fontSize: 12, fontWeight: '600', color: '#888', textAlign: 'center' },
-  statSubtitle: { fontSize: 10, color: '#666', textAlign: 'center' },
-  chartContainer: { flexDirection: 'row', height: 200, backgroundColor: '#0f0f0f', borderRadius: 12, padding: 16, alignItems: 'flex-end' },
+  scrollContent: { paddingBottom: S.xxl, paddingTop: S.md },
+  section: { paddingHorizontal: S.xl, marginBottom: S.xl },
+  sectionTitle: { ...T.caption, marginBottom: S.md },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -S.xs },
+  statCard: {
+    width: (SCREEN_WIDTH - (S.xl * 2) - (S.sm * 2)) / 2,
+    margin: S.xs,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
+  },
+  statIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  statValue: { fontSize: 24, fontWeight: '700', color: C.text, marginBottom: 4 },
+  statTitle: { fontSize: 11, fontWeight: '600', color: C.textSubtle, textAlign: 'center' },
+  statSubtitle: { fontSize: 10, color: C.textSubtle, textAlign: 'center' },
+  chartContainer: {
+    flexDirection: 'row',
+    height: 200,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    alignItems: 'flex-end',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
   growthBarContainer: { flex: 1, alignItems: 'center', marginRight: 8 },
   growthBarWrapper: { height: 150, alignItems: 'center', justifyContent: 'flex-end' },
-  growthBar: { width: '100%', backgroundColor: '#ff003c', borderRadius: 4, minWidth: 20 },
-  workoutBar: { backgroundColor: '#00d4aa' },
-  growthBarLabel: { fontSize: 8, color: '#888', marginTop: 8, textAlign: 'center' },
-  growthBarValue: { fontSize: 10, fontWeight: '600', color: '#fff', marginTop: 2 },
-  barChartContainer: { backgroundColor: '#0f0f0f', borderRadius: 12, padding: 16 },
+  growthBar: { width: '100%', backgroundColor: C.accent, borderRadius: 4, minWidth: 18 },
+  workoutBar: { backgroundColor: C.success },
+  growthBarLabel: { fontSize: 8, color: C.textSubtle, marginTop: 8, textAlign: 'center' },
+  growthBarValue: { fontSize: 10, fontWeight: '600', color: C.text, marginTop: 2 },
+  barChartContainer: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
   chartBarContainer: { marginBottom: 16 },
   chartBarLabelContainer: { width: 100, marginBottom: 6 },
-  chartBarLabel: { fontSize: 12, fontWeight: '600', color: '#fff' },
-  chartBarTrack: { height: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 6, overflow: 'hidden', marginBottom: 4 },
+  chartBarLabel: { fontSize: 11, fontWeight: '600', color: C.text },
+  chartBarTrack: { height: 10, backgroundColor: C.surface, borderRadius: 6, overflow: 'hidden', marginBottom: 4 },
   chartBarFill: { height: '100%', borderRadius: 6 },
-  chartBarValue: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  topUsersList: { backgroundColor: '#0f0f0f', borderRadius: 12, overflow: 'hidden' },
-  topUserItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  topUserRank: { fontSize: 14, fontWeight: '700', color: '#ff003c', width: 40 },
-  topUserName: { fontSize: 14, fontWeight: '600', color: '#fff', flex: 1 },
-  topUserPoints: { fontSize: 14, fontWeight: '700', color: '#00d4aa' },
+  chartBarValue: { fontSize: 12, fontWeight: '700', color: C.text },
+  topUsersList: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  topUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: S.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  topUserRank: { fontSize: 12, fontWeight: '700', color: C.accent, width: 36 },
+  topUserName: { fontSize: 12, fontWeight: '600', color: C.text, flex: 1 },
+  topUserPoints: { fontSize: 12, fontWeight: '700', color: C.success },
 });

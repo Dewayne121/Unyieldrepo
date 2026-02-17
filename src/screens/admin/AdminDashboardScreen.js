@@ -13,20 +13,22 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../../context/AppContext';
 import api from '../../services/api';
-import { 
-  Colors, 
-  Typography, 
-  Spacing, 
-  Shadows, 
-  BorderRadius, 
-  SKINS,
-  moderateScale 
-} from '../../constants/colors';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 export default function AdminDashboardScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -86,8 +88,8 @@ export default function AdminDashboardScreen({ navigation }) {
   // --- Components ---
 
   const StatCard = ({ title, value, subtitle, icon, color, onPress }) => {
-    const displayValue = formatNumber(value || 0);
-    const displaySubtitle = subtitle !== undefined ? String(subtitle) : null;
+    const displayValue = typeof value === 'number' ? formatNumber(value) : formatNumber(0);
+    const displaySubtitle = subtitle !== undefined && subtitle !== null ? String(subtitle) : null;
     const isPressable = !!onPress;
 
     return (
@@ -102,33 +104,26 @@ export default function AdminDashboardScreen({ navigation }) {
             <Ionicons name={icon} size={20} color={color} />
           </View>
           {isPressable && (
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={{ opacity: 0.5 }} />
+            <Ionicons name="chevron-forward" size={16} color={C.textSubtle} style={{ opacity: 0.6 }} />
           )}
         </View>
         <Text style={styles.statValue}>{displayValue}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
+        <Text style={styles.statTitle}>{String(title)}</Text>
         {displaySubtitle !== null && (
-          <Text style={[styles.statSubtitle, { color: color }]}>{displaySubtitle}</Text>
+          <Text style={[styles.statSubtitle, { color }]}>{displaySubtitle}</Text>
         )}
       </TouchableOpacity>
     );
   };
 
   const QuickAction = ({ title, icon, color, onPress }) => (
-    <TouchableOpacity 
-      style={styles.quickAction} 
-      onPress={onPress} 
-      activeOpacity={0.7}
+    <TouchableOpacity
+      style={[styles.quickAction, { borderColor: `${color}55` }]}
+      onPress={onPress}
+      activeOpacity={0.75}
     >
-      <View style={[styles.quickActionGradientBorder, { borderColor: `${color}40` }]}>
-        <LinearGradient
-          colors={[`${color}20`, `${color}05`]}
-          style={styles.quickActionContent}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Ionicons name={icon} size={24} color={color} />
-        </LinearGradient>
+      <View style={[styles.quickActionIcon, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={18} color={color} />
       </View>
       <Text style={styles.quickActionTitle} numberOfLines={2}>{title}</Text>
     </TouchableOpacity>
@@ -149,7 +144,7 @@ export default function AdminDashboardScreen({ navigation }) {
           {user.profileImage ? (
             <Image source={{ uri: user.profileImage }} style={styles.topUserImage} />
           ) : (
-            <View style={[styles.topUserImagePlaceholder, { backgroundColor: Colors.surface }]}>
+            <View style={styles.topUserImagePlaceholder}>
               <Text style={styles.topUserInitial}>{userInitial}</Text>
             </View>
           )}
@@ -179,12 +174,7 @@ export default function AdminDashboardScreen({ navigation }) {
           <Text style={styles.regionStatCount}>{count || 0}</Text>
         </View>
         <View style={styles.regionProgressBarBg}>
-          <LinearGradient
-            colors={[color, `${color}80`]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.regionProgressFill, { width: `${percentage}%` }]}
-          />
+          <View style={[styles.regionProgressFill, { width: `${percentage}%`, backgroundColor: color }]} />
         </View>
       </View>
     );
@@ -194,11 +184,11 @@ export default function AdminDashboardScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={[styles.header, { paddingTop: insets.top + S.lg }]}>
           <Text style={styles.pageTitle}>Admin Dashboard</Text>
         </View>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={C.accent} />
           <Text style={styles.loadingText}>Loading dashboard...</Text>
         </View>
       </View>
@@ -209,12 +199,12 @@ export default function AdminDashboardScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={[styles.header, { paddingTop: insets.top + S.lg }]}>
           <Text style={styles.pageTitle}>Admin Dashboard</Text>
         </View>
         <View style={styles.centerContainer}>
           <View style={styles.errorIconContainer}>
-            <Ionicons name="alert-circle" size={48} color={Colors.error} />
+            <Ionicons name="alert-circle" size={48} color={C.danger} />
           </View>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadStats}>
@@ -230,13 +220,13 @@ export default function AdminDashboardScreen({ navigation }) {
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={[styles.header, { paddingTop: insets.top + S.lg }]}>
         <View>
           <Text style={styles.pageTitle}>Admin Dashboard</Text>
           <Text style={styles.pageSubtitle}>Overview & Management</Text>
         </View>
         <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh-outline" size={20} color={Colors.textMuted} />
+          <Ionicons name="refresh-outline" size={20} color={C.textSubtle} />
         </TouchableOpacity>
       </View>
 
@@ -247,9 +237,9 @@ export default function AdminDashboardScreen({ navigation }) {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh} 
-            tintColor={Colors.primary} 
-            colors={[Colors.primary]}
-            progressBackgroundColor={Colors.card}
+            tintColor={C.accent}
+            colors={[C.accent]}
+            progressBackgroundColor={C.card}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -259,7 +249,7 @@ export default function AdminDashboardScreen({ navigation }) {
             {/* Community Support View */}
             <View style={styles.section}>
               <View style={styles.infoCard}>
-                <Ionicons name="information-circle-outline" size={20} color={Colors.info} />
+                <Ionicons name="information-circle-outline" size={20} color={C.info} />
                 <Text style={styles.infoCardText}>
                   As Community Support, you have access to video moderation tools to help maintain platform quality.
                 </Text>
@@ -291,14 +281,9 @@ export default function AdminDashboardScreen({ navigation }) {
                 onPress={() => navigation.navigate('AdminVideoModeration')}
                 activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={[Colors.primary, '#d02020']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.primaryActionGradient}
-                >
+                <View style={styles.primaryActionGradient}>
                   <View style={styles.primaryActionContent}>
-                    <Ionicons name="play-circle" size={24} color="#fff" />
+                    <Ionicons name="play-circle" size={22} color={C.white} />
                     <Text style={styles.primaryActionText}>Start Moderation Queue</Text>
                   </View>
                   {(pendingVideosCount ?? 0) > 0 && (
@@ -306,7 +291,7 @@ export default function AdminDashboardScreen({ navigation }) {
                       <Text style={styles.pendingBadgeText}>{pendingVideosCount}</Text>
                     </View>
                   )}
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </View>
           </>
@@ -323,7 +308,7 @@ export default function AdminDashboardScreen({ navigation }) {
                   value={stats?.users?.total || 0}
                   subtitle={`+${stats?.users?.newToday || 0} today`}
                   icon="people"
-                  color={Colors.primary}
+                  color={C.accent}
                   onPress={() => navigation.navigate('AdminUsers')}
                 />
                 <StatCard
@@ -331,7 +316,7 @@ export default function AdminDashboardScreen({ navigation }) {
                   value={stats?.users?.active || 0}
                   subtitle="7-day activity"
                   icon="pulse"
-                  color={Colors.info}
+                  color={C.info}
                 />
                 <StatCard
                   title="Pending Videos"
@@ -359,49 +344,49 @@ export default function AdminDashboardScreen({ navigation }) {
                 <QuickAction
                   title="Users"
                   icon="people"
-                  color={Colors.primary}
+                  color={C.accent}
                   onPress={() => navigation.navigate('AdminUsers')}
                 />
                 <QuickAction
                   title="Review"
                   icon="shield-checkmark"
-                  color={Colors.success}
+                  color={C.success}
                   onPress={() => navigation.navigate('AdminVideoModeration')}
                 />
                 <QuickAction
                   title="Challenges"
                   icon="trophy"
-                  color="#af52de"
+                  color={C.info}
                   onPress={() => navigation.navigate('AdminChallenges')}
                 />
                 <QuickAction
                   title="Appeals"
                   icon="refresh-circle"
-                  color="#ff9500"
+                  color={C.warning}
                   onPress={() => navigation.navigate('AdminAppeals')}
                 />
                 <QuickAction
                   title="Reports"
                   icon="alert-circle"
-                  color="#ff3b30"
+                  color={C.danger}
                   onPress={() => navigation.navigate('AdminReports')}
                 />
                 <QuickAction
                   title="Notify"
                   icon="megaphone"
-                  color="#5856d6"
+                  color={C.accent}
                   onPress={() => navigation.navigate('AdminNotifications')}
                 />
                 <QuickAction
                   title="Analytics"
                   icon="bar-chart"
-                  color={Colors.info}
+                  color={C.info}
                   onPress={() => navigation.navigate('AdminAnalytics')}
                 />
                 <QuickAction
                   title="Logs"
                   icon="receipt"
-                  color={Colors.textMuted}
+                  color={C.textSubtle}
                   onPress={() => navigation.navigate('AdminAuditLog')}
                 />
               </View>
@@ -416,21 +401,21 @@ export default function AdminDashboardScreen({ navigation }) {
                   value={stats?.workouts?.total || 0}
                   subtitle={`+${stats?.workouts?.today || 0} today`}
                   icon="fitness"
-                  color={Colors.info}
+                  color={C.info}
                 />
                 <StatCard
                   title="Approval Rate"
                   value={stats?.videos?.approved || 0}
                   subtitle="Videos"
                   icon="checkmark-done"
-                  color={Colors.success}
+                  color={C.success}
                 />
                 <StatCard
                   title="Points Given"
                   value={stats?.points?.totalAwarded || 0}
                   subtitle={`Today: ${stats?.points?.today || 0}`}
                   icon="star"
-                  color={Colors.gold}
+                  color={C.warning}
                 />
                 <StatCard
                   title="Active Events"
@@ -468,7 +453,7 @@ export default function AdminDashboardScreen({ navigation }) {
                 <Text style={styles.sectionTitle}>User Demographics</Text>
                 <View style={styles.cardContainer}>
                   {stats.regionDistribution.map((item, index) => {
-                    const colors = [Colors.primary, Colors.info, '#ff9500', '#af52de', '#34c759', '#ff3b30'];
+                    const colors = [C.accent, C.info, C.warning, '#7C5CFF', C.success, C.danger];
                     return (
                       <RegionStatItem
                         key={item._id}
@@ -495,12 +480,7 @@ export default function AdminDashboardScreen({ navigation }) {
                         return (
                           <View key={index} style={styles.chartBarGroup}>
                             <View style={styles.chartBarTrack}>
-                              <LinearGradient
-                                colors={[Colors.primary, `${Colors.primary}60`]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
-                                style={[styles.chartBarFill, { height: `${barHeight}%` }]}
-                              />
+                              <View style={[styles.chartBarFill, { height: `${barHeight}%` }]} />
                             </View>
                             <Text style={styles.chartBarLabel}>{String(item.month || '').substring(0, 3)}</Text>
                             <Text style={styles.chartBarValue}>{item.count || 0}</Text>
@@ -522,228 +502,207 @@ export default function AdminDashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: ADMIN_SURFACES.page,
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.lg,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   pageTitle: {
-    ...Typography.h2,
-    color: Colors.text,
+    ...T.title,
   },
   pageSubtitle: {
-    ...Typography.bodySmall,
-    color: Colors.textMuted,
-    marginTop: 2,
+    ...T.subtitle,
+    marginTop: 4,
   },
   refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.cardLight,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: S.xl,
   },
   loadingText: {
-    marginTop: Spacing.md,
-    ...Typography.body,
-    color: Colors.textMuted,
+    marginTop: S.md,
+    ...T.bodyMuted,
   },
   errorIconContainer: {
-    marginBottom: Spacing.md,
-    opacity: 0.8,
+    marginBottom: S.md,
+    opacity: 0.9,
   },
   errorText: {
-    marginBottom: Spacing.lg,
-    ...Typography.body,
-    color: Colors.error,
+    marginBottom: S.lg,
+    ...T.body,
+    color: C.danger,
     textAlign: 'center',
   },
   retryButton: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.cardLight,
-    borderRadius: BorderRadius.md,
+    paddingHorizontal: S.xl,
+    paddingVertical: S.sm,
+    backgroundColor: C.card,
+    borderRadius: R.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   retryButtonText: {
-    ...Typography.body,
-    fontWeight: '600',
-    color: Colors.text,
+    ...T.body,
+    color: C.text,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Spacing.xxl,
-    paddingTop: Spacing.lg,
+    paddingBottom: S.xxl,
+    paddingTop: S.md,
   },
   section: {
-    paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
+    paddingHorizontal: S.xl,
+    marginBottom: S.xl,
   },
   sectionTitle: {
-    ...Typography.h4,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    opacity: 0.9,
+    ...T.caption,
+    color: C.textSubtle,
+    marginBottom: S.md,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: S.md,
   },
   seeAllText: {
-    ...Typography.caption,
-    color: Colors.primary,
+    ...T.caption,
+    color: C.accent,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -Spacing.xs,
+    marginHorizontal: -S.xs,
   },
   statCard: {
-    width: (SCREEN_WIDTH - (Spacing.xl * 2) - (Spacing.sm * 2)) / 2, // Accounting for margins
-    margin: Spacing.xs,
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    width: (SCREEN_WIDTH - (S.xl * 2) - (S.sm * 2)) / 2,
+    margin: S.xs,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.subtle,
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
   },
   statCardPressable: {
-    borderColor: Colors.borderLight,
+    borderColor: C.borderSoft,
   },
   statHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    marginBottom: S.sm,
   },
   statIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.md,
+    width: 30,
+    height: 30,
+    borderRadius: R.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statValue: {
-    ...Typography.h2,
-    fontSize: moderateScale(22), // Slightly adjust for cards
-    color: Colors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    color: C.text,
+    fontFamily: T.title.fontFamily,
     marginBottom: 2,
   },
   statTitle: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+    ...T.caption,
+    color: C.textSubtle,
     marginBottom: 2,
   },
   statSubtitle: {
-    ...Typography.monoTiny,
-    fontSize: 9,
+    ...T.mono,
   },
-  
-  // Quick Actions
   quickActionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    marginHorizontal: -Spacing.xs,
+    marginHorizontal: -S.xs,
   },
   quickAction: {
-    width: '25%', // 4 columns
+    width: '25%',
     alignItems: 'center',
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.xs,
-  },
-  quickActionGradientBorder: {
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius.xl,
+    padding: S.xs,
+    marginBottom: S.md,
     borderWidth: 1,
-    marginBottom: Spacing.xs,
-    overflow: 'hidden',
+    borderRadius: R.lg,
+    backgroundColor: C.panel,
   },
-  quickActionContent: {
-    flex: 1,
+  quickActionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 6,
   },
   quickActionTitle: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.textMuted,
+    ...T.caption,
+    fontSize: 9,
     textAlign: 'center',
+    color: C.textMuted,
   },
-  
-  // Lists & Cards
   cardListContainer: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.xl,
+    backgroundColor: C.card,
+    borderRadius: R.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   cardContainer: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
+    backgroundColor: C.card,
+    borderRadius: R.xl,
+    padding: S.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
-  
-  // Top User Item
   topUserItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    padding: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   rankBadge: {
-    width: 24,
-    marginRight: Spacing.sm,
+    width: 26,
+    marginRight: S.sm,
     alignItems: 'center',
   },
   rankText: {
-    ...Typography.mono,
-    color: Colors.textMuted,
+    ...T.mono,
   },
   topRankText: {
-    color: Colors.gold,
+    color: C.warning,
     fontWeight: '800',
   },
   topUserAvatar: {
-    marginRight: Spacing.sm,
+    marginRight: S.sm,
   },
   topUserImage: {
     width: 36,
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   topUserImagePlaceholder: {
     width: 36,
@@ -751,40 +710,41 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: C.surface,
   },
   topUserInitial: {
-    ...Typography.h4,
-    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
+    fontFamily: T.title.fontFamily,
   },
   topUserInfo: {
     flex: 1,
-    marginRight: Spacing.sm,
+    marginRight: S.sm,
   },
   topUserName: {
-    ...Typography.bodySmall,
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: C.text,
   },
   topUserHandle: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 10,
+    color: C.textSubtle,
   },
   topUserPointsContainer: {
     alignItems: 'flex-end',
   },
   topUserPoints: {
-    ...Typography.mono,
-    color: Colors.primary,
+    ...T.mono,
+    color: C.accent,
   },
   topUserPointsLabel: {
     fontSize: 9,
-    color: Colors.textMuted,
+    color: C.textSubtle,
     textTransform: 'uppercase',
   },
-  
-  // Region Stats
   regionStatItem: {
-    marginBottom: Spacing.md,
+    marginBottom: S.md,
   },
   regionStatHeader: {
     flexDirection: 'row',
@@ -793,17 +753,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   regionStatName: {
-    ...Typography.bodySmall,
-    color: Colors.text,
+    fontSize: 12,
     fontWeight: '600',
+    color: C.text,
   },
   regionStatCount: {
-    ...Typography.mono,
-    color: Colors.textMuted,
+    ...T.mono,
   },
   regionProgressBarBg: {
     height: 6,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -811,33 +770,31 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
-  
-  // Charts
   chartCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
+    backgroundColor: C.card,
+    borderRadius: R.xl,
+    padding: S.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     minHeight: 200,
   },
   chartContent: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: 160,
-    paddingRight: Spacing.lg,
+    paddingRight: S.lg,
   },
   chartBarGroup: {
     width: 32,
     alignItems: 'center',
-    marginRight: Spacing.md,
+    marginRight: S.md,
     height: '100%',
     justifyContent: 'flex-end',
   },
   chartBarTrack: {
     width: 8,
     height: '80%',
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 4,
     justifyContent: 'flex-end',
     overflow: 'hidden',
@@ -845,82 +802,80 @@ const styles = StyleSheet.create({
   chartBarFill: {
     width: '100%',
     borderRadius: 4,
+    backgroundColor: C.accent,
   },
   chartBarLabel: {
-    marginTop: Spacing.xs,
+    marginTop: S.xs,
     fontSize: 9,
-    color: Colors.textMuted,
+    color: C.textSubtle,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
   chartBarValue: {
     position: 'absolute',
-    top: -20, // Should be calculated better in a real chart lib, but works for simple bars
+    top: -20,
     fontSize: 9,
-    color: Colors.text,
+    color: C.text,
     fontWeight: '600',
   },
-  
-  // Info Card
   infoCard: {
-    backgroundColor: `${Colors.info}15`,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: C.surface,
+    padding: S.md,
+    borderRadius: R.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: S.lg,
     borderWidth: 1,
-    borderColor: `${Colors.info}30`,
+    borderColor: C.borderSoft,
   },
   infoCardText: {
     flex: 1,
-    marginLeft: Spacing.sm,
-    ...Typography.bodySmall,
-    color: Colors.text,
+    marginLeft: S.sm,
+    ...T.bodyMuted,
+    color: C.text,
   },
-  
-  // Primary Action Button (Community Support)
   primaryActionButton: {
-    borderRadius: BorderRadius.xl,
+    borderRadius: R.xl,
     overflow: 'hidden',
-    ...Shadows.medium,
+    ...ADMIN_SHADOWS.card,
   },
   primaryActionGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.xl,
+    paddingVertical: S.lg,
+    paddingHorizontal: S.xl,
+    backgroundColor: C.accent,
   },
   primaryActionContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: S.md,
   },
   primaryActionText: {
-    ...Typography.h4,
-    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.white,
+    letterSpacing: 0.6,
+    fontFamily: T.title.fontFamily,
   },
   pendingBadge: {
     backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: S.sm,
     paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    borderRadius: R.pill,
   },
   pendingBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: C.white,
   },
-  
   bottomSpacer: {
-    height: Spacing.xxl,
+    height: S.xxl,
   },
-  
-  // Layout helpers
   twoColumnSection: {
-    marginBottom: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+    marginBottom: S.xl,
+    paddingHorizontal: S.xl,
   },
   columnContainer: {
     width: '100%',

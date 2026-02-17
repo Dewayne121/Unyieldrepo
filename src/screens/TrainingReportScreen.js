@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp, calcPoints } from '../context/AppContext';
 import { EXERCISES, EXERCISE_CATEGORIES } from '../constants/exercises';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +12,7 @@ import { SKINS } from '../constants/colors';
 import { Spacing, BorderRadius, Typography } from '../constants/colors';
 import api from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
+import SortButton from '../components/SortButton';
 import TrainingCalendar from '../components/calendar/TrainingCalendar';
 import CalendarHeader from '../components/calendar/CalendarHeader';
 import CalendarLegend from '../components/calendar/CalendarLegend';
@@ -17,6 +20,17 @@ import DayDetailModal from '../components/calendar/DayDetailModal';
 import QuickPBModal from '../components/calendar/QuickPBModal';
 import ReflectionModal from '../components/calendar/ReflectionModal';
 import DateSelectorModal from '../components/calendar/DateSelectorModal';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
+
+// Sort options for training logs
+const SORT_OPTIONS = {
+  'date-desc': { label: 'Newest', icon: 'funnel-outline' },
+  'date-asc': { label: 'Oldest', icon: 'funnel' },
+  'exercise': { label: 'Exercise A-Z', icon: 'text-outline' },
+  'volume-desc': { label: 'Volume High-Low', icon: 'barbell-outline' },
+};
+const SORT_CYCLE = ['date-desc', 'date-asc', 'exercise', 'volume-desc'];
+const SORT_KEY = 'unyield_training_log_sort';
 
 // Calculate progressive overload suggestions
 const calculateProgressiveOverload = (logs) => {
@@ -108,6 +122,7 @@ export default function TrainingReportScreen({ navigation }) {
   const { theme, skin } = useTheme();
   const { user, logs, weightUnit, deleteLog, deleteAllLogs, addLog, updateLog } = useApp();
   const { refreshUser } = useAuth();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
 
   const [loading, setLoading] = useState(false);
@@ -118,6 +133,10 @@ export default function TrainingReportScreen({ navigation }) {
   const [logReps, setLogReps] = useState('');
   const [logWeight, setLogWeight] = useState('');
   const [savingLog, setSavingLog] = useState(false);
+  const [sortOption, setSortOption] = useState('date-desc');
+  const [showSortLabel, setShowSortLabel] = useState(false);
+  const sortLabelOpacity = useRef(new Animated.Value(0)).current;
+  const sortLabelTranslate = useRef(new Animated.Value(10)).current;
 
   // Calendar view state
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'list'
@@ -137,12 +156,39 @@ export default function TrainingReportScreen({ navigation }) {
     return EXERCISES.filter(e => e.category === selectedCategory);
   }, [selectedCategory]);
 
+  // Refresh logs when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const refreshOnFocus = async () => {
+        if (refreshUser) {
+          await refreshUser();
+        }
+      };
+      refreshOnFocus();
+    }, [refreshUser])
+  );
+
+  // Load saved sort preference on mount
+  useEffect(() => {
+    AsyncStorage.getItem(SORT_KEY).then(saved => {
+      if (saved && SORT_OPTIONS[saved]) {
+        setSortOption(saved);
+      }
+    });
+  }, []);
+
+  // Save sort preference when it changes
+  useEffect(() => {
+    AsyncStorage.setItem(SORT_KEY, sortOption).catch(() => {});
+  }, [sortOption]);
+
   // Handle delete log
   const handleDeleteLog = async (logId) => {
-    Alert.alert(
-      'Delete Log',
-      'Are you sure you want to delete this workout log?',
-      [
+    showAlert({
+      title: 'Delete Log',
+      message: 'Are you sure you want to delete this workout log?',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -150,17 +196,30 @@ export default function TrainingReportScreen({ navigation }) {
           onPress: async () => {
             try {
               const result = await deleteLog(logId);
+              if (result.success && refreshUser) {
+                await refreshUser();
+              }
               if (!result.success) {
-                Alert.alert('Error', 'Failed to delete log. Please try again.');
+                showAlert({
+                  title: 'Error',
+                  message: 'Failed to delete log. Please try again.',
+                  icon: 'error',
+                  buttons: [{ text: 'OK', style: 'default' }]
+                });
               }
             } catch (error) {
               console.error('Error deleting log:', error);
-              Alert.alert('Error', 'Failed to delete log. Please try again.');
+              showAlert({
+                title: 'Error',
+                message: 'Failed to delete log. Please try again.',
+                icon: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+              });
             }
           },
         },
       ]
-    );
+    });
   };
 
   // Handle add personal log
@@ -169,12 +228,22 @@ export default function TrainingReportScreen({ navigation }) {
     const weight = parseFloat(logWeight);
 
     if (!reps || reps <= 0) {
-      Alert.alert('Error', 'Please enter valid reps.');
+      showAlert({
+        title: 'Error',
+        message: 'Please enter valid reps.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
     if (!weight || weight < 0) {
-      Alert.alert('Error', 'Please enter valid weight.');
+      showAlert({
+        title: 'Error',
+        message: 'Please enter valid weight.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
@@ -196,6 +265,11 @@ export default function TrainingReportScreen({ navigation }) {
 
       await addLog(newLog);
 
+      // Refresh user data to get updated logs
+      if (refreshUser) {
+        await refreshUser();
+      }
+
       // Reset form
       setLogReps('');
       setLogWeight('');
@@ -203,10 +277,20 @@ export default function TrainingReportScreen({ navigation }) {
       setSelectedExercise(EXERCISES[0].id);
       setSelectedCategory('all');
 
-      Alert.alert('Log Saved', 'Your personal workout has been recorded.');
+      showAlert({
+        title: 'Log Saved',
+        message: 'Your personal workout has been recorded.',
+        icon: 'success',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } catch (error) {
       console.error('Error adding log:', error);
-      Alert.alert('Error', 'Failed to add log. Please try again.');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to add log. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setSavingLog(false);
     }
@@ -261,10 +345,20 @@ export default function TrainingReportScreen({ navigation }) {
       setShowPBModal(false);
       setSelectedLogForPB(null);
       setShowDayDetail(false);
-      Alert.alert('Success', 'Personal best saved! 🏆');
+      showAlert({
+        title: 'Success',
+        message: 'Personal best saved! 🏆',
+        icon: 'success',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } catch (error) {
       console.error('Error saving PB:', error);
-      Alert.alert('Error', 'Failed to save PB. Please try again.');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to save PB. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -292,16 +386,59 @@ export default function TrainingReportScreen({ navigation }) {
 
       setShowReflectionModal(false);
       setShowDayDetail(false);
-      Alert.alert('Success', 'Reflection saved!');
+      showAlert({
+        title: 'Success',
+        message: 'Reflection saved!',
+        icon: 'success',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } catch (error) {
       console.error('Error saving reflection:', error);
-      Alert.alert('Error', 'Failed to save reflection. Please try again.');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to save reflection. Please try again.',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
   const handleDateSelect = (month, year) => {
     setCurrentMonth(month);
     setCurrentYear(year);
+  };
+
+  const cycleSortOption = () => {
+    const currentIndex = SORT_CYCLE.indexOf(sortOption);
+    const nextIndex = (currentIndex + 1) % SORT_CYCLE.length;
+    const newSort = SORT_CYCLE[nextIndex];
+    setSortOption(newSort);
+
+    // Show sort label animation
+    setShowSortLabel(true);
+    sortLabelOpacity.setValue(0);
+    sortLabelTranslate.setValue(10);
+
+    Animated.parallel([
+      Animated.timing(sortLabelOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sortLabelTranslate, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(() => {
+        Animated.timing(sortLabelOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => setShowSortLabel(false));
+      }, 1500);
+    });
   };
 
   const handleCloseModals = () => {
@@ -361,10 +498,32 @@ export default function TrainingReportScreen({ navigation }) {
     return calculateProgressiveOverload(logs);
   }, [logs]);
 
-  // Recent workouts (last 10)
-  const recentWorkouts = useMemo(() => {
-    return (logs || []).slice(0, 10);
-  }, [logs]);
+  // Sorted workouts (last 10, sorted by selected option)
+  const sortedWorkouts = useMemo(() => {
+    if (!logs || logs.length === 0) return [];
+
+    const sorted = [...logs];
+
+    return sorted.sort((a, b) => {
+      const aVolume = (a.weight || 0) * (a.reps || 0);
+      const bVolume = (b.weight || 0) * (b.reps || 0);
+
+      switch (sortOption) {
+        case 'exercise':
+          return (a.exercise || '').localeCompare(b.exercise || '');
+        case 'volume-desc':
+          return bVolume - aVolume;
+        case 'date-asc':
+          return new Date(a.date || 0) - new Date(b.date || 0);
+        case 'date-desc':
+        default:
+          return new Date(b.date || 0) - new Date(a.date || 0);
+      }
+    }).slice(0, 10);
+  }, [logs, sortOption]);
+
+  // Keep recentWorkouts for any other references
+  const recentWorkouts = sortedWorkouts;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -412,6 +571,8 @@ export default function TrainingReportScreen({ navigation }) {
       <ScreenHeader
         title="TRAINING REPORT"
         subtitle="Track & Analyze"
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
         rightAction={
           <View style={{ flexDirection: 'row', gap: 4 }}>
             <TouchableOpacity
@@ -502,6 +663,79 @@ export default function TrainingReportScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             )}
+
+            {/* Recent Logs - Always visible under calendar */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>RECENT LOGS</Text>
+                {showSortLabel && (
+                  <Animated.Text
+                    style={[
+                      styles.sortLabel,
+                      {
+                        opacity: sortLabelOpacity,
+                        transform: [{ translateX: sortLabelTranslate }],
+                      },
+                    ]}
+                  >
+                    {SORT_OPTIONS[sortOption].label.toUpperCase()}
+                  </Animated.Text>
+                )}
+                <SortButton sortOption={sortOption} onPress={cycleSortOption} />
+              </View>
+
+              {!recentWorkouts || recentWorkouts.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>NO LOGS FOUND</Text>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => setShowAddLogModal(true)}>
+                    <Text style={styles.actionBtnText}>ADD LOG</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                recentWorkouts.map((log, index) => {
+                  const isPersonalLog = log.type === 'personal';
+
+                  return (
+                    <View key={log.id || index} style={styles.card}>
+                      <View style={styles.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <Text style={styles.cardTitle}>{log.exercise || 'Unknown'}</Text>
+                            {isPersonalLog && (
+                              <View style={styles.miniBadge}>
+                                <Text style={styles.miniBadgeText}>PERSONAL</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.cardDate}>{formatDate(log.date)}</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteLog(log.id)}
+                          style={styles.deleteIconBtn}
+                        >
+                          <Ionicons name="close" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.cardDivider} />
+
+                      <View style={styles.cardRow}>
+                        <View style={styles.cardStat}>
+                          <Text style={styles.cardStatLabel}>SET</Text>
+                          <Text style={styles.cardStatValue}>{formatWeight(log.weight)}<Text style={styles.unit}>kg</Text> × {log.reps}</Text>
+                        </View>
+                        <View style={styles.cardStat}>
+                          <Text style={styles.cardStatLabel}>VOLUME</Text>
+                          <Text style={[styles.cardStatValue, { color: '#888' }]}>
+                            {Math.round((log.weight || 0) * (log.reps || 0)).toLocaleString()}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
           </View>
         )}
 
@@ -603,6 +837,20 @@ export default function TrainingReportScreen({ navigation }) {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>RECENT LOGS</Text>
+                {showSortLabel && (
+                  <Animated.Text
+                    style={[
+                      styles.sortLabel,
+                      {
+                        opacity: sortLabelOpacity,
+                        transform: [{ translateX: sortLabelTranslate }],
+                      },
+                    ]}
+                  >
+                    {SORT_OPTIONS[sortOption].label.toUpperCase()}
+                  </Animated.Text>
+                )}
+                <SortButton sortOption={sortOption} onPress={cycleSortOption} />
               </View>
 
               {!recentWorkouts || recentWorkouts.length === 0 ? (
@@ -820,6 +1068,9 @@ export default function TrainingReportScreen({ navigation }) {
         onClose={handleCloseModals}
         onSelect={handleDateSelect}
       />
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
@@ -945,6 +1196,13 @@ function createStyles(theme, skin, insets) {
       fontWeight: '800',
       color: '#666',
       letterSpacing: 1,
+    },
+    sortLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#9b2c2c',
+      letterSpacing: 1,
+      marginRight: 8,
     },
     deleteLink: {
       fontSize: 10,

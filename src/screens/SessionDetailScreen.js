@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,12 +13,14 @@ import { useApp, EXERCISES } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { SKINS } from '../constants/colors';
 import ScreenHeader from '../components/ScreenHeader';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 export default function SessionDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { sessions, deleteSession } = useWorkout();
   const { weightUnit } = useApp();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const sessionId = route.params?.sessionId;
   const session = sessions.find(s => s.id === sessionId);
@@ -88,10 +89,11 @@ export default function SessionDetailScreen({ navigation, route }) {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Session',
-      'Are you sure you want to delete this workout session? This cannot be undone.',
-      [
+    showAlert({
+      title: 'Delete Session',
+      message: 'Are you sure you want to delete this workout session? This cannot be undone.',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -102,7 +104,7 @@ export default function SessionDetailScreen({ navigation, route }) {
           },
         },
       ]
-    );
+    });
   };
 
   const getExercise = (exerciseId) => {
@@ -255,6 +257,9 @@ export default function SessionDetailScreen({ navigation, route }) {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

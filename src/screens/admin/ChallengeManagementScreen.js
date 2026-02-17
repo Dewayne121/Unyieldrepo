@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   Modal,
   TextInput,
@@ -15,13 +14,28 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video } from 'expo-av';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import api from '../../services/api';
-import { colors } from '../../constants/colors';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
+
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 const STATUS_FILTERS = ['active', 'ended', 'inactive', 'all'];
 
 export default function ChallengeManagementScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  const getChallengeId = (item) => item?.id || item?._id || null;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('challenges'); // 'challenges' or 'queue'
@@ -59,7 +73,12 @@ export default function ChallengeManagementScreen({ navigation }) {
       }
     } catch (err) {
       console.error('Error loading challenges:', err);
-      Alert.alert('Error', err.message || 'Failed to load challenges');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to load challenges',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       setChallenges([]);
     } finally {
       setLoading(false);
@@ -91,7 +110,12 @@ export default function ChallengeManagementScreen({ navigation }) {
       }
     } catch (err) {
       console.error('[ADMIN CHALLENGE] Error loading submissions:', err);
-      Alert.alert('Error', err.message || 'Failed to load submissions');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to load submissions',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       setSubmissions([]);
     } finally {
       setLoading(false);
@@ -109,50 +133,93 @@ export default function ChallengeManagementScreen({ navigation }) {
   };
 
   const handleDeleteChallenge = (challenge) => {
-    Alert.alert(
-      'Delete Challenge',
-      `Are you sure you want to delete "${challenge.title}"? This action cannot be undone.`,
-      [
+    showAlert({
+      title: 'Delete Challenge',
+      message: `Are you sure you want to delete "${challenge.title}"? This action cannot be undone.`,
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await api.deleteChallenge(challenge._id);
+              const challengeId = getChallengeId(challenge);
+              if (!challengeId) {
+                showAlert({
+                  title: 'Error',
+                  message: 'Challenge ID is missing',
+                  icon: 'error',
+                  buttons: [{ text: 'OK', style: 'default' }]
+                });
+                return;
+              }
+              const response = await api.deleteChallenge(challengeId);
               if (response.success) {
-                Alert.alert('Success', 'Challenge deleted successfully');
+                showAlert({
+                  title: 'Success',
+                  message: 'Challenge deleted successfully',
+                  icon: 'success',
+                  buttons: [{ text: 'OK', style: 'default' }]
+                });
                 loadChallenges();
               }
             } catch (err) {
-              Alert.alert('Error', err.message || 'Failed to delete challenge');
+              showAlert({
+                title: 'Error',
+                message: err.message || 'Failed to delete challenge',
+                icon: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+              });
             }
           },
         },
       ]
-    );
+    });
   };
 
   const handleToggleActive = async (challenge) => {
     try {
-      const response = await api.updateChallenge(challenge._id, {
+      const challengeId = getChallengeId(challenge);
+      if (!challengeId) {
+        showAlert({
+          title: 'Error',
+          message: 'Challenge ID is missing',
+          icon: 'error',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
+        return;
+      }
+      const response = await api.updateChallenge(challengeId, {
         isActive: !challenge.isActive,
       });
       if (response.success) {
-        Alert.alert(
-          'Success',
-          `Challenge ${challenge.isActive ? 'deactivated' : 'activated'}`
-        );
+        showAlert({
+          title: 'Success',
+          message: `Challenge ${challenge.isActive ? 'deactivated' : 'activated'}`,
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         loadChallenges();
       }
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to update challenge');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to update challenge',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
   const handleVerifySubmission = async (submission, action) => {
     if (action === 'reject' && !rejectionReason.trim()) {
-      Alert.alert('Required', 'Please enter a rejection reason');
+      showAlert({
+        title: 'Required',
+        message: 'Please enter a rejection reason',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
 
@@ -165,14 +232,24 @@ export default function ChallengeManagementScreen({ navigation }) {
       );
 
       if (response.success) {
-        Alert.alert('Success', response.message || 'Submission verified');
+        showAlert({
+          title: 'Success',
+          message: response.message || 'Submission verified',
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         setShowVerifyModal(false);
         setRejectionReason('');
         setSelectedSubmission(null);
         loadSubmissionsQueue();
       }
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to verify submission');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to verify submission',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setVerifying(false);
     }
@@ -186,10 +263,10 @@ export default function ChallengeManagementScreen({ navigation }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return '#00d4aa';
-      case 'ended': return '#888';
-      case 'inactive': return '#ff9500';
-      default: return '#888';
+      case 'active': return C.success;
+      case 'ended': return C.textSubtle;
+      case 'inactive': return C.warning;
+      default: return C.textSubtle;
     }
   };
 
@@ -201,8 +278,10 @@ export default function ChallengeManagementScreen({ navigation }) {
     return 'Active';
   };
 
-  const renderChallengeCard = (challenge) => (
-    <View key={challenge._id} style={styles.card}>
+  const renderChallengeCard = (challenge) => {
+    const challengeId = getChallengeId(challenge);
+    return (
+      <View key={challengeId || challenge.title} style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{challenge.title}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(getStatusLabel(challenge)) }]}>
@@ -216,17 +295,17 @@ export default function ChallengeManagementScreen({ navigation }) {
 
       <View style={styles.cardStats}>
         <View style={styles.statItem}>
-          <Ionicons name="people" size={16} color="#888" />
+          <Ionicons name="people" size={16} color={C.textSubtle} />
           <Text style={styles.statText}>{challenge.participantCount || 0}</Text>
         </View>
         {challenge.pendingSubmissions > 0 && (
           <View style={styles.statItem}>
-            <Ionicons name="time" size={16} color="#ff9500" />
+            <Ionicons name="time" size={16} color={C.warning} />
             <Text style={styles.statText}>{challenge.pendingSubmissions} pending</Text>
           </View>
         )}
         <View style={styles.statItem}>
-          <Ionicons name="trophy" size={16} color="#d4af37" />
+          <Ionicons name="trophy" size={16} color={C.warning} />
           <Text style={styles.statText}>{challenge.reward} pts</Text>
         </View>
       </View>
@@ -236,25 +315,26 @@ export default function ChallengeManagementScreen({ navigation }) {
           style={styles.actionButton}
           onPress={() => navigation.navigate('AdminChallengeBuilder', { challenge, isEdit: true })}
         >
-          <Ionicons name="pencil" size={18} color="#fff" />
+          <Ionicons name="pencil" size={18} color={C.white} />
           <Text style={styles.actionButtonText}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#333' }]}
+          style={[styles.actionButton, { backgroundColor: C.surface }]}
           onPress={() => handleToggleActive(challenge)}
         >
-          <Ionicons name={challenge.isActive ? "pause" : "play"} size={18} color="#fff" />
+          <Ionicons name={challenge.isActive ? "pause" : "play"} size={18} color={C.white} />
           <Text style={styles.actionButtonText}>{challenge.isActive ? 'Deactivate' : 'Activate'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#ff003c' }]}
+          style={[styles.actionButton, { backgroundColor: C.accent }]}
           onPress={() => handleDeleteChallenge(challenge)}
         >
-          <Ionicons name="trash" size={18} color="#fff" />
+          <Ionicons name="trash" size={18} color={C.white} />
         </TouchableOpacity>
       </View>
-    </View>
-  );
+      </View>
+    );
+  };
 
   const renderSubmissionCard = (submission) => (
     <View key={submission.id} style={styles.card}>
@@ -263,7 +343,7 @@ export default function ChallengeManagementScreen({ navigation }) {
           {submission.user.profileImage ? (
             <Image source={{ uri: submission.user.profileImage }} style={styles.userAvatar} />
           ) : (
-            <View style={[styles.userAvatar, { backgroundColor: '#333' }]}>
+            <View style={[styles.userAvatar, { backgroundColor: C.surface }]}>
               <Text style={styles.avatarText}>{submission.user.name[0]}</Text>
             </View>
           )}
@@ -272,13 +352,13 @@ export default function ChallengeManagementScreen({ navigation }) {
             <Text style={styles.cardSubtitle}>@{submission.user.username}</Text>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: '#ff9500' }]}>
+        <View style={[styles.statusBadge, { backgroundColor: C.warning }]}>
           <Text style={styles.statusText}>Pending</Text>
         </View>
       </View>
 
       <View style={styles.challengeTag}>
-        <Ionicons name="trophy" size={14} color="#d4af37" />
+        <Ionicons name="trophy" size={14} color={C.warning} />
         <Text style={styles.challengeTagName}>{submission.challenge?.title || 'Unknown Challenge'}</Text>
       </View>
 
@@ -294,7 +374,7 @@ export default function ChallengeManagementScreen({ navigation }) {
           style={styles.videoButton}
           onPress={() => {/* Navigate to video player */}}
         >
-          <Ionicons name="play-circle" size={24} color="#ff003c" />
+          <Ionicons name="play-circle" size={24} color={C.accent} />
           <Text style={styles.videoButtonText}>Watch Video</Text>
         </TouchableOpacity>
       )}
@@ -305,17 +385,17 @@ export default function ChallengeManagementScreen({ navigation }) {
 
       <View style={styles.cardActions}>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#00d4aa', flex: 1 }]}
+          style={[styles.actionButton, { backgroundColor: C.success, flex: 1 }]}
           onPress={() => handleVerifySubmission(submission, 'approve')}
         >
-          <Ionicons name="checkmark" size={18} color="#000" />
-          <Text style={[styles.actionButtonText, { color: '#000' }]}>Approve</Text>
+          <Ionicons name="checkmark" size={18} color={C.black} />
+          <Text style={[styles.actionButtonText, { color: C.black }]}>Approve</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#ff003c', flex: 1 }]}
+          style={[styles.actionButton, { backgroundColor: C.accent, flex: 1 }]}
           onPress={() => openVerifyModal(submission)}
         >
-          <Ionicons name="close" size={18} color="#fff" />
+          <Ionicons name="close" size={18} color={C.white} />
           <Text style={styles.actionButtonText}>Reject</Text>
         </TouchableOpacity>
       </View>
@@ -327,14 +407,14 @@ export default function ChallengeManagementScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={C.white} />
         </TouchableOpacity>
         <Text style={styles.pageTitle}>Challenge Management</Text>
         <TouchableOpacity
           style={styles.createButton}
           onPress={() => navigation.navigate('AdminChallengeBuilder')}
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={24} color={C.white} />
         </TouchableOpacity>
       </View>
 
@@ -378,14 +458,14 @@ export default function ChallengeManagementScreen({ navigation }) {
       {/* Content */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#ff003c" />
+          <ActivityIndicator size="large" color={C.accent} />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       ) : (
         <ScrollView
           style={styles.content}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ff003c" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />
           }
         >
           {activeTab === 'challenges' ? (
@@ -393,7 +473,7 @@ export default function ChallengeManagementScreen({ navigation }) {
               challenges.map(renderChallengeCard)
             ) : (
               <View style={styles.centerContainer}>
-                <Ionicons name="trophy-outline" size={64} color="#333" />
+                <Ionicons name="trophy-outline" size={64} color={C.textSubtle} />
                 <Text style={styles.emptyText}>No challenges found</Text>
                 <Text style={styles.emptySubtext}>Create a new challenge to get started</Text>
               </View>
@@ -403,7 +483,7 @@ export default function ChallengeManagementScreen({ navigation }) {
               submissions.map(renderSubmissionCard)
             ) : (
               <View style={styles.centerContainer}>
-                <Ionicons name="checkmark-circle-outline" size={64} color="#00d4aa" />
+                <Ionicons name="checkmark-circle-outline" size={64} color={C.success} />
                 <Text style={styles.emptyText}>No pending submissions</Text>
               </View>
             )
@@ -421,7 +501,7 @@ export default function ChallengeManagementScreen({ navigation }) {
             <TextInput
               style={styles.textInput}
               placeholder="Enter rejection reason..."
-              placeholderTextColor="#666"
+              placeholderTextColor={C.textSubtle}
               value={rejectionReason}
               onChangeText={setRejectionReason}
               multiline
@@ -431,7 +511,7 @@ export default function ChallengeManagementScreen({ navigation }) {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: '#333' }]}
+                style={[styles.modalButton, { backgroundColor: C.surface }]}
                 onPress={() => {
                   setShowVerifyModal(false);
                   setRejectionReason('');
@@ -440,7 +520,7 @@ export default function ChallengeManagementScreen({ navigation }) {
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: '#ff003c' }]}
+                style={[styles.modalButton, { backgroundColor: C.accent }]}
                 onPress={() => handleVerifySubmission(selectedSubmission, 'reject')}
                 disabled={verifying}
               >
@@ -452,126 +532,134 @@ export default function ChallengeManagementScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
+  container: ADMIN_SURFACES.page,
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   backButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
     textAlign: 'center',
+    ...T.h2,
   },
   createButton: {
-    backgroundColor: '#ff003c',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: C.accent,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tabs: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    paddingHorizontal: S.xl,
   },
   tab: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: S.sm,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#ff003c',
+    borderBottomColor: C.accent,
   },
   tabText: {
-    fontSize: 14,
-    color: '#888',
-    fontWeight: '600',
+    ...T.caption,
+    color: C.textSubtle,
   },
   tabTextActive: {
-    color: '#fff',
+    color: C.text,
   },
   filtersScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#0a0a0a',
+    paddingHorizontal: S.xl,
+    paddingVertical: S.sm,
+    backgroundColor: C.panel,
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: R.pill,
+    backgroundColor: C.card,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterChipActive: {
-    backgroundColor: '#ff003c',
+    backgroundColor: C.accentSoft,
+    borderColor: C.accent,
   },
   filterChipText: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: C.textSubtle,
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: '#fff',
+    color: C.accent,
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: S.xl,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: S.xl,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#888',
+    marginTop: S.md,
+    ...T.bodyMuted,
   },
   emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
+    marginTop: S.md,
+    ...T.h2,
   },
   emptySubtext: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#444',
+    marginTop: S.sm,
+    ...T.bodyMuted,
   },
   card: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
     borderWidth: 1,
-    borderColor: '#1a1a1a',
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: S.sm,
   },
   userInfo: {
     flexDirection: 'row',
@@ -582,59 +670,62 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12,
+    marginRight: S.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.white,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: C.textSubtle,
     marginTop: 2,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: R.pill,
+    backgroundColor: C.surface,
   },
   statusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: 9,
+    fontWeight: '700',
+    color: C.text,
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   cardDescription: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 12,
+    fontSize: 13,
+    color: C.textMuted,
+    marginBottom: S.sm,
   },
   challengeTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: S.sm,
     alignSelf: 'flex-start',
   },
   challengeTagName: {
-    fontSize: 12,
-    color: '#d4af37',
+    fontSize: 11,
+    color: C.text,
     marginLeft: 6,
     fontWeight: '600',
   },
   cardStats: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: S.sm,
   },
   statItem: {
     flexDirection: 'row',
@@ -643,42 +734,46 @@ const styles = StyleSheet.create({
   },
   statText: {
     marginLeft: 4,
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: C.textSubtle,
   },
   submissionDetails: {
-    backgroundColor: '#0a0a0a',
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 8,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.sm,
+    marginVertical: S.sm,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   detailLabel: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: C.textSubtle,
     marginBottom: 4,
   },
   detailValue: {
-    color: '#fff',
+    color: C.text,
     fontWeight: '600',
   },
   videoButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 8,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.sm,
+    marginVertical: S.sm,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   videoButtonText: {
     marginLeft: 8,
-    fontSize: 14,
-    color: '#ff003c',
+    fontSize: 12,
+    color: C.accent,
     fontWeight: '600',
   },
   notesText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 11,
+    color: C.textSubtle,
     fontStyle: 'italic',
     marginVertical: 8,
   },
@@ -690,53 +785,55 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#333',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     minWidth: 50,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   actionButtonText: {
     marginLeft: 6,
-    fontSize: 12,
-    color: '#fff',
+    fontSize: 11,
+    color: C.text,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
   },
   modalContent: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.lg,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     borderWidth: 1,
-    borderColor: '#1a1a1a',
+    borderColor: C.border,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    ...T.h2,
+    marginBottom: 6,
   },
   modalSubtitle: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 16,
+    ...T.bodyMuted,
+    marginBottom: S.md,
   },
   textInput: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 12,
-    color: '#fff',
-    fontSize: 14,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.md,
+    color: C.text,
+    fontSize: 13,
     minHeight: 80,
     textAlignVertical: 'top',
-    marginBottom: 16,
+    marginBottom: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   modalActions: {
     flexDirection: 'row',
@@ -744,13 +841,16 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: R.md,
     alignItems: 'center',
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   modalButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.text,
   },
 });

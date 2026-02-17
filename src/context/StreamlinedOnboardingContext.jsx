@@ -208,6 +208,10 @@ export const StreamlinedOnboardingProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // Tutorial state - for showing XP tutorial after onboarding
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialTopic, setTutorialTopic] = useState('xp');
+
   // Load saved onboarding data
   useEffect(() => {
     loadOnboardingData();
@@ -468,10 +472,10 @@ export const StreamlinedOnboardingProvider = ({ children }) => {
 
       // Body profile data
       if (bodyData?.age) {
-        updates.age = bodyData.age;
+        updates.age = parseInt(bodyData.age, 10);
       }
       if (bodyData?.heightCm) {
-        updates.height = bodyData.heightCm;
+        updates.height = parseInt(bodyData.heightCm, 10);
       }
       if (bodyData?.heightFt && bodyData?.heightIn) {
         // Convert ft/in to cm for backend
@@ -510,6 +514,14 @@ export const StreamlinedOnboardingProvider = ({ children }) => {
         [ONBOARDING_COMPLETED_KEY, 'true'],
         [AUTH_ONBOARDING_KEY, 'true'],
       ]);
+
+      // Show XP tutorial for first-time users
+      const hasSeenXPTutorial = await AsyncStorage.getItem('unyield_tutorial_seen_xp');
+      if (!hasSeenXPTutorial) {
+        setShowTutorial(true);
+        setTutorialTopic('xp');
+      }
+
       setIsCompleted(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -539,6 +551,8 @@ export const StreamlinedOnboardingProvider = ({ children }) => {
     onboardingData,
     isLoading,
     isCompleted,
+    showTutorial,
+    tutorialTopic,
     currentStep: getCurrentStep(),
 
     // Constants
@@ -559,6 +573,8 @@ export const StreamlinedOnboardingProvider = ({ children }) => {
     generateRecommendedPlan,
     completeOnboarding,
     resetOnboarding,
+    setShowTutorial,
+    setTutorialTopic,
   };
 
   return (

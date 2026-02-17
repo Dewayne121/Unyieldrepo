@@ -124,36 +124,25 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Quick Actions Grid (UX Rule 7: Efficiency) */}
         <View style={styles.gridContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.gridItem, { backgroundColor: 'rgba(155, 44, 44, 0.15)', borderColor: 'rgba(155, 44, 44, 0.3)' }]}
-            onPress={() => navigation.navigate('Training', { screen: 'ActiveSession' })}
-          >
-            <Ionicons name="play" size={24} color={theme.primary} />
-            <Text style={[styles.gridLabel, { color: theme.primary }]}>TRAIN</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.gridItem}
             onPress={() => navigation.navigate('Training', { screen: 'WorkoutHome' })}
           >
-            <Ionicons name="add-circle-outline" size={24} color="#fff" />
-            <Text style={styles.gridLabel}>CREATE</Text>
+            <Ionicons name="play" size={28} color={theme.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.gridItem}
-            onPress={() => navigation.navigate('Training')}
+            onPress={() => navigation.navigate('CalendarLog')}
           >
-            <Ionicons name="stats-chart-outline" size={24} color="#fff" />
-            <Text style={styles.gridLabel}>STATS</Text>
+            <Ionicons name="calendar-outline" size={28} color="#fff" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.gridItem}
             onPress={() => navigation.navigate('Compete')}
           >
-            <Ionicons name="trophy-outline" size={24} color="#fff" />
-            <Text style={styles.gridLabel}>COMPETE</Text>
+            <Ionicons name="trophy-outline" size={28} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -207,7 +196,7 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>RECENT WORKOUTS</Text>
             {recentSessionsSummary.length > 0 && (
-              <TouchableOpacity onPress={() => navigation.navigate('Training', { screen: 'SessionHistory' })}>
+              <TouchableOpacity onPress={() => navigation.jumpTo('Training')}>
                 <Text style={styles.seeAllText}>SEE ALL</Text>
               </TouchableOpacity>
             )}
@@ -215,10 +204,10 @@ export default function DashboardScreen({ navigation }) {
 
           {recentSessionsSummary.length > 0 ? (
             recentSessionsSummary.map((session) => (
-              <TouchableOpacity 
-                key={session.id} 
+              <TouchableOpacity
+                key={session.id}
                 style={styles.workoutCard}
-                onPress={() => navigation.navigate('Training', { screen: 'SessionDetail', params: { sessionId: session.id } })}
+                onPress={() => navigation.jumpTo('Training')}
                 activeOpacity={0.7}
               >
                 <View style={styles.workoutIcon}>
@@ -239,9 +228,9 @@ export default function DashboardScreen({ navigation }) {
             <View style={styles.emptyCard}>
               <Ionicons name="clipboard-outline" size={32} color="#444" style={{ marginBottom: 8 }} />
               <Text style={styles.emptyText}>NO RECENT SESSIONS</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.startBtn}
-                onPress={() => navigation.navigate('Training', { screen: 'WorkoutHome' })}
+                onPress={() => navigation.jumpTo('Training')}
               >
                 <Text style={styles.startBtnText}>START TRAINING</Text>
               </TouchableOpacity>
@@ -306,7 +295,7 @@ function createStyles(theme, skin, insets) {
       marginBottom: 32,
     },
     gridItem: {
-      width: '48%',
+      width: '31%',
       backgroundColor: theme.bgCard,
       borderRadius: 16,
       padding: 16,
@@ -314,8 +303,7 @@ function createStyles(theme, skin, insets) {
       justifyContent: 'center',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.05)',
-      gap: 8,
-      height: 90,
+      height: 80,
     },
     gridLabel: {
       fontSize: 11,

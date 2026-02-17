@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { SKINS } from '../constants/colors';
 import ScreenHeader from '../components/ScreenHeader';
 import { useFocusEffect } from '@react-navigation/native';
+import CustomAlert, { useCustomAlert } from '../components/CustomAlert';
 
 export default function ActiveSessionScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -25,6 +25,7 @@ export default function ActiveSessionScreen({ navigation }) {
   const isDark = skin === SKINS.operator || skin === SKINS.midnight;
   const { activeSession, updateSet, addSet, removeSet, finishSession, discardActiveSession } = useWorkout();
   const { weightUnit } = useApp();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(true);
@@ -154,14 +155,15 @@ export default function ActiveSessionScreen({ navigation }) {
   };
 
   const handleRemoveSet = (exerciseId, setId) => {
-    Alert.alert(
-      'Remove Set',
-      'Remove this set?',
-      [
+    showAlert({
+      title: 'Remove Set',
+      message: 'Remove this set?',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Remove', style: 'destructive', onPress: () => removeSet(activeSession.id, exerciseId, setId) },
       ]
-    );
+    });
   };
 
   const handleFinish = () => {
@@ -175,10 +177,11 @@ export default function ActiveSessionScreen({ navigation }) {
   };
 
   const handleDiscard = () => {
-    Alert.alert(
-      'Discard Workout',
-      'Are you sure you want to discard this workout? All progress will be lost.',
-      [
+    showAlert({
+      title: 'Discard Workout',
+      message: 'Are you sure you want to discard this workout? All progress will be lost.',
+      icon: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Discard',
@@ -189,7 +192,7 @@ export default function ActiveSessionScreen({ navigation }) {
           },
         },
       ]
-    );
+    });
   };
 
   const getExercise = (exerciseId) => {
@@ -466,6 +469,9 @@ export default function ActiveSessionScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }

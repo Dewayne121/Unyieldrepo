@@ -1,13 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import api from '../../services/api';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
+
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
 
 const REPORT_TYPES = ['suspicious_lift', 'fake_video', 'inappropriate', 'spam', 'other'];
 
 export default function ReportsManagementScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reports, setReports] = useState([]);
@@ -32,7 +47,12 @@ export default function ReportsManagementScreen({ navigation }) {
       }
     } catch (err) {
       console.error('Error loading reports:', err);
-      Alert.alert('Error', 'Failed to load reports');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to load reports',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,10 +75,20 @@ export default function ReportsManagementScreen({ navigation }) {
         setShowReviewModal(false);
         setReviewNotes('');
         setActionTaken('no_action');
-        Alert.alert('Success', `Report ${action}d`);
+        showAlert({
+          title: 'Success',
+          message: `Report ${action}d`,
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to review report');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to review report',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
@@ -75,23 +105,26 @@ export default function ReportsManagementScreen({ navigation }) {
       <TouchableOpacity style={styles.reportCard} onPress={() => onPress(report)}>
         <View style={styles.reportHeader}>
           <View style={styles.reportTypeBadge}>
-            <Ionicons name={typeIcons[report.reportType] || 'flag'} size={16} color="#fff" />
+            <Ionicons name={typeIcons[report.reportType] || 'flag'} size={16} color={C.white} />
             <Text style={styles.reportTypeText}>{report.reportType.replace(/_/g, ' ')}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: report.status === 'pending' ? '#ff9500' : report.status === 'resolved' ? '#00d4aa' : '#666' }]}>
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: report.status === 'pending' ? C.warning : report.status === 'resolved' ? C.success : C.textSubtle },
+          ]}>
             <Text style={styles.statusText}>{report.status}</Text>
           </View>
         </View>
 
         <View style={styles.reportReporter}>
-          <Ionicons name="person" size={12} color="#888" />
+          <Ionicons name="person" size={12} color={C.textSubtle} />
           <Text style={styles.reportReporterText}>Reported by: {report.reporter?.name || 'Unknown'}</Text>
         </View>
 
         <Text style={styles.reportReason} numberOfLines={3}>{report.reason}</Text>
 
         <View style={styles.reportVideoInfo}>
-          <Ionicons name="videocam" size={12} color="#888" />
+          <Ionicons name="videocam" size={12} color={C.textSubtle} />
           <Text style={styles.reportVideoText}>{report.videoSubmission?.exercise || 'Unknown exercise'}</Text>
         </View>
 
@@ -104,7 +137,7 @@ export default function ReportsManagementScreen({ navigation }) {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={C.white} />
         </TouchableOpacity>
         <Text style={styles.pageTitle}>Reports</Text>
         <View style={styles.headerRight} />
@@ -133,11 +166,11 @@ export default function ReportsManagementScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#ff003c" />
+          <ActivityIndicator size="large" color={C.accent} />
         </View>
       ) : reports.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="checkmark-circle-outline" size={64} color="#00d4aa" />
+          <Ionicons name="checkmark-circle-outline" size={64} color={C.success} />
           <Text style={styles.emptyText}>No reports found</Text>
         </View>
       ) : (
@@ -162,7 +195,7 @@ export default function ReportsManagementScreen({ navigation }) {
               <>
                 <Text style={styles.modalTitle}>Review Report</Text>
                 <View style={styles.modalReportInfo}>
-                  <Ionicons name="flag" size={16} color="#ff3b30" />
+                  <Ionicons name="flag" size={16} color={C.danger} />
                   <Text style={styles.modalReportType}>{selectedReport.reportType.replace(/_/g, ' ')}</Text>
                 </View>
                 <Text style={styles.modalReporter}>Reported by: {selectedReport.reporter?.name || 'Unknown'}</Text>
@@ -193,7 +226,7 @@ export default function ReportsManagementScreen({ navigation }) {
                 <TextInput
                   style={styles.notesInput}
                   placeholder="Review notes (optional)..."
-                  placeholderTextColor="#666"
+                  placeholderTextColor={C.textSubtle}
                   value={reviewNotes}
                   onChangeText={setReviewNotes}
                   multiline
@@ -201,11 +234,11 @@ export default function ReportsManagementScreen({ navigation }) {
                 />
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.modalButton, styles.dismissButton]} onPress={() => handleReview(selectedReport, 'dismiss')}>
-                    <Ionicons name="close" size={20} color="#fff" />
+                    <Ionicons name="close" size={18} color={C.white} />
                     <Text style={styles.modalButtonText}>Dismiss</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalButton, styles.resolveButton]} onPress={() => handleReview(selectedReport, 'resolve')}>
-                    <Ionicons name="checkmark" size={20} color="#fff" />
+                    <Ionicons name="checkmark" size={18} color={C.white} />
                     <Text style={styles.modalButtonText}>Resolve</Text>
                   </TouchableOpacity>
                 </View>
@@ -217,62 +250,304 @@ export default function ReportsManagementScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  pageTitle: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1 },
-  headerRight: { width: 40 },
-  filtersScroll: { paddingHorizontal: 16, marginBottom: 12 },
-  filtersContent: { paddingRight: 16 },
-  filterLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginRight: 8, alignSelf: 'center' },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 4, backgroundColor: '#0f0f0f', borderRadius: 12, marginRight: 6 },
-  filterChipActive: { backgroundColor: '#ff003c' },
-  filterChipText: { fontSize: 11, color: '#888', fontWeight: '600' },
-  filterChipTextActive: { color: '#fff' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { marginTop: 16, fontSize: 16, color: '#888' },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16 },
-  reportCard: { backgroundColor: '#0f0f0f', borderRadius: 12, padding: 16, marginBottom: 12 },
-  reportHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  reportTypeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ff3b30', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
-  reportTypeText: { fontSize: 11, fontWeight: '700', color: '#fff', textTransform: 'uppercase' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 10, fontWeight: '700', color: '#fff', textTransform: 'uppercase' },
-  reportReporter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  reportReporterText: { fontSize: 11, color: '#888' },
-  reportReason: { fontSize: 13, color: '#ccc', lineHeight: 18, marginBottom: 12 },
-  reportVideoInfo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  reportVideoText: { fontSize: 12, color: '#888' },
-  reportDate: { fontSize: 10, color: '#666' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalContent: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 20, width: '100%', maxWidth: 400 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16 },
-  modalReportInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  modalReportType: { fontSize: 14, fontWeight: '700', color: '#ff3b30', textTransform: 'uppercase' },
-  modalReporter: { fontSize: 12, color: '#888', marginBottom: 12 },
-  modalReasonLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 4 },
-  modalReason: { fontSize: 13, color: '#ccc', lineHeight: 18, marginBottom: 12 },
-  modalVideoInfo: { backgroundColor: '#0f0f0f', borderRadius: 8, padding: 12, marginBottom: 16 },
-  modalVideoExercise: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  modalVideoStats: { fontSize: 12, color: '#888', marginTop: 4 },
-  actionLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 8 },
-  actionScroll: { marginBottom: 16 },
-  actionChip: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#0f0f0f', borderRadius: 8, marginRight: 8, borderWidth: 1, borderColor: '#333' },
-  actionChipActive: { backgroundColor: '#ff003c', borderColor: '#ff003c' },
-  actionChipText: { fontSize: 11, color: '#888', fontWeight: '600' },
-  actionChipTextActive: { color: '#fff' },
-  notesInput: { backgroundColor: '#0f0f0f', borderRadius: 8, padding: 12, color: '#fff', borderWidth: 1, borderColor: '#333', marginBottom: 16, minHeight: 80, textAlignVertical: 'top' },
-  modalActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  modalButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 8, gap: 8 },
-  dismissButton: { backgroundColor: '#666' },
-  resolveButton: { backgroundColor: '#00d4aa' },
-  modalButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  closeButton: { padding: 12, alignItems: 'center' },
-  closeButtonText: { fontSize: 14, color: '#888' },
+  container: ADMIN_SURFACES.page,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pageTitle: {
+    ...T.h2,
+    flex: 1,
+  },
+  headerRight: {
+    width: 34,
+  },
+  filtersScroll: {
+    paddingHorizontal: S.xl,
+    marginTop: S.sm,
+    marginBottom: S.xs,
+  },
+  filtersContent: {
+    paddingRight: S.xl,
+    alignItems: 'center',
+  },
+  filterLabel: {
+    ...T.caption,
+    marginRight: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: C.card,
+    borderRadius: R.pill,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: C.border,
+    minHeight: 24,
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: C.accentSoft,
+    borderColor: C.accent,
+  },
+  filterChipText: {
+    fontSize: 11,
+    color: C.textSubtle,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: C.accent,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: S.xl,
+  },
+  emptyText: {
+    marginTop: S.md,
+    ...T.bodyMuted,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: S.xl,
+    paddingBottom: S.xxl,
+  },
+  reportCard: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: S.sm,
+  },
+  reportTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.danger,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: R.md,
+    gap: 4,
+  },
+  reportTypeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.white,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: R.md,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: C.white,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  reportReporter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  reportReporterText: {
+    fontSize: 11,
+    color: C.textSubtle,
+  },
+  reportReason: {
+    fontSize: 13,
+    color: C.text,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  reportVideoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  reportVideoText: {
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  reportDate: {
+    fontSize: 10,
+    color: C.textSubtle,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.lg,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalTitle: {
+    ...T.h2,
+    marginBottom: S.md,
+  },
+  modalReportInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  modalReportType: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.danger,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  modalReporter: {
+    fontSize: 12,
+    color: C.textSubtle,
+    marginBottom: 12,
+  },
+  modalReasonLabel: {
+    ...T.caption,
+    marginBottom: 4,
+  },
+  modalReason: {
+    fontSize: 13,
+    color: C.text,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  modalVideoInfo: {
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.sm,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalVideoExercise: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.text,
+  },
+  modalVideoStats: {
+    fontSize: 11,
+    color: C.textSubtle,
+    marginTop: 4,
+  },
+  actionLabel: {
+    ...T.caption,
+    marginBottom: 8,
+  },
+  actionScroll: {
+    marginBottom: 16,
+  },
+  actionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  actionChipActive: {
+    backgroundColor: C.accentSoft,
+    borderColor: C.accent,
+  },
+  actionChipText: {
+    fontSize: 11,
+    color: C.textSubtle,
+    fontWeight: '600',
+  },
+  actionChipTextActive: {
+    color: C.accent,
+  },
+  notesInput: {
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.md,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontSize: 13,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: R.md,
+    gap: 6,
+  },
+  dismissButton: {
+    backgroundColor: C.textSubtle,
+  },
+  resolveButton: {
+    backgroundColor: C.success,
+  },
+  modalButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.white,
+  },
+  closeButton: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 12,
+    color: C.textSubtle,
+  },
 });

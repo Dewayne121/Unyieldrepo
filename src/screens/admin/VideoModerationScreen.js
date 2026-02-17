@@ -6,19 +6,44 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Modal,
   TextInput,
   Dimensions,
   RefreshControl,
 } from 'react-native';
+import CustomAlert, { useCustomAlert } from '../../components/CustomAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
 import { Video } from 'expo-av';
 import api from '../../services/api';
+import {
+  ADMIN_COLORS,
+  ADMIN_SPACING,
+  ADMIN_RADIUS,
+  ADMIN_TYPOGRAPHY,
+  ADMIN_SHADOWS,
+  ADMIN_SURFACES,
+} from '../../constants/adminTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const C = ADMIN_COLORS;
+const S = ADMIN_SPACING;
+const R = ADMIN_RADIUS;
+const T = ADMIN_TYPOGRAPHY;
+
+// Filter options
+const SOURCE_FILTERS = {
+  all: { label: 'All Types', value: 'all' },
+  workout: { label: 'Workouts', value: 'workout', icon: 'fitness' },
+  challenge: { label: 'Challenges', value: 'challenge', icon: 'trophy' },
+};
+
+const DATE_FILTERS = {
+  all: { label: 'All Time', value: 'all' },
+  today: { label: 'Today', value: 'today' },
+  week: { label: 'This Week', value: 'week' },
+};
 
 export default function VideoModerationScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -27,13 +52,17 @@ export default function VideoModerationScreen({ navigation }) {
   const [verifying, setVerifying] = useState(false);
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [showOriginal, setShowOriginal] = useState(false); // Toggle for blurred/original
   const [rejectionReason, setRejectionReason] = useState('');
   const [pointsOverride, setPointsOverride] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [showPointsModal, setShowPointsModal] = useState(false);
   const [filterExercise, setFilterExercise] = useState('');
   const [debouncedExercise, setDebouncedExercise] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
   const videoRef = useRef(null);
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -42,6 +71,31 @@ export default function VideoModerationScreen({ navigation }) {
 
     return () => clearTimeout(handle);
   }, [filterExercise]);
+
+  // Filter videos by date
+  const filterByDate = (videos, dateFilter) => {
+    if (dateFilter === 'all') return videos;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekStart = todayStart - (7 * 24 * 60 * 60 * 1000);
+
+    return videos.filter(video => {
+      const videoDate = new Date(video.createdAt || video.submittedAt || 0).getTime();
+      if (dateFilter === 'today') {
+        return videoDate >= todayStart;
+      } else if (dateFilter === 'week') {
+        return videoDate >= weekStart;
+      }
+      return true;
+    });
+  };
+
+  // Filter videos by source
+  const filterBySource = (videos, sourceFilter) => {
+    if (sourceFilter === 'all') return videos;
+    return videos.filter(video => video.source === sourceFilter);
+  };
 
   const loadVideos = async () => {
     console.log('[VIDEO MODERATION] Loading videos...');
@@ -89,7 +143,11 @@ export default function VideoModerationScreen({ navigation }) {
             source: 'challenge',
             createdAt: submission.submittedAt || submission.createdAt,
           }));
-        const combined = [...workoutVideos, ...challengeSubmissions];
+        let combined = [...workoutVideos, ...challengeSubmissions];
+        // Apply source filter
+        combined = filterBySource(combined, sourceFilter);
+        // Apply date filter
+        combined = filterByDate(combined, dateFilter);
         combined.sort((a, b) => {
           const aTime = new Date(a.createdAt || a.submittedAt || 0).getTime();
           const bTime = new Date(b.createdAt || b.submittedAt || 0).getTime();
@@ -102,7 +160,12 @@ export default function VideoModerationScreen({ navigation }) {
       }
     } catch (err) {
       console.error('[VIDEO MODERATION] Error loading videos:', err);
-      Alert.alert('Error', err.message || 'Failed to load videos');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to load videos',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       setVideos([]);
     } finally {
       setLoading(false);
@@ -112,7 +175,7 @@ export default function VideoModerationScreen({ navigation }) {
 
   useEffect(() => {
     loadVideos();
-  }, [debouncedExercise]);
+  }, [debouncedExercise, sourceFilter, dateFilter]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -138,17 +201,37 @@ export default function VideoModerationScreen({ navigation }) {
 
         // Handle orphan video case
         if (response.data?.deleted) {
-          Alert.alert('Removed', response.message || 'Orphan video removed');
+          showAlert({
+            title: 'Removed',
+            message: response.message || 'Orphan video removed',
+            icon: 'info',
+            buttons: [{ text: 'OK', style: 'default' }]
+          });
         } else {
-          Alert.alert('Success', action === 'approve' ? 'Video approved' : 'Video rejected');
+          showAlert({
+            title: 'Success',
+            message: action === 'approve' ? 'Video approved successfully' : 'Video rejected',
+            icon: 'success',
+            buttons: [{ text: 'OK', style: 'default' }]
+          });
         }
       } else {
         console.error('[VIDEO MODERATION] Verify failed:', response);
-        Alert.alert('Error', response.error || 'Failed to verify video');
+        showAlert({
+          title: 'Error',
+          message: response.error || 'Failed to verify video',
+          icon: 'error',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (err) {
       console.error('[VIDEO MODERATION] Error verifying video:', err);
-      Alert.alert('Error', err.message || 'Failed to verify video');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to verify video',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setVerifying(false);
     }
@@ -163,13 +246,28 @@ export default function VideoModerationScreen({ navigation }) {
         setVideos(prev => prev.filter(v => v.id !== submissionId));
         setSelectedVideo(null);
         setRejectionReason('');
-        Alert.alert('Success', action === 'approve' ? 'Challenge entry approved' : 'Challenge entry rejected');
+        showAlert({
+          title: 'Success',
+          message: action === 'approve' ? 'Challenge entry approved' : 'Challenge entry rejected',
+          icon: 'success',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       } else {
-        Alert.alert('Error', response.error || 'Failed to verify challenge entry');
+        showAlert({
+          title: 'Error',
+          message: response.error || 'Failed to verify challenge entry',
+          icon: 'error',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
       }
     } catch (err) {
       console.error('[VIDEO MODERATION] Error verifying challenge submission:', err);
-      Alert.alert('Error', err.message || 'Failed to verify challenge entry');
+      showAlert({
+        title: 'Error',
+        message: err.message || 'Failed to verify challenge entry',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     } finally {
       setVerifying(false);
     }
@@ -177,44 +275,76 @@ export default function VideoModerationScreen({ navigation }) {
 
   const handleApprove = (video) => {
     const targetVideo = video || selectedVideo;
+    console.log('[VIDEO MODERATION] handleApprove called with:', { videoId: targetVideo?.id, source: targetVideo?.source });
+
     if (!targetVideo) {
-      Alert.alert('Error', 'No video selected');
+      showAlert({
+        title: 'Error',
+        message: 'No video selected',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
-    if (targetVideo.source === 'challenge') {
-      Alert.alert(
-        'Approve Challenge Entry',
-        'Approve this challenge submission?',
-        [
+
+    if (!targetVideo.id) {
+      showAlert({
+        title: 'Error',
+        message: 'Video ID is missing',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+      return;
+    }
+
+    const videoId = targetVideo.id;
+    const isChallenge = targetVideo.source === 'challenge';
+
+    if (isChallenge) {
+      showAlert({
+        title: 'Approve Challenge Entry',
+        message: 'Approve this challenge submission?',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Approve', onPress: () => handleVerifyChallenge(targetVideo.id, 'approve') },
+          {
+            text: 'Approve',
+            style: 'default',
+            onPress: () => {
+              console.log('[VIDEO MODERATION] Approving challenge:', videoId);
+              handleVerifyChallenge(videoId, 'approve');
+            }
+          },
         ]
-      );
+      });
       return;
     }
-    Alert.alert(
-      'Approve Video',
-      'Award points for this video?',
-      [
+
+    // For workout videos, go straight to auto approve or show points modal
+    showAlert({
+      title: 'Approve Video',
+      message: 'Award points for this video?',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Auto Calculate',
-          onPress: () => handleVerifyWorkout(targetVideo.id, 'approve'),
-        },
-        {
-          text: 'Set Custom Points',
+          text: 'Approve',
+          style: 'default',
           onPress: () => {
-            setSelectedVideo(targetVideo);
-            setShowPointsModal(true);
+            console.log('[VIDEO MODERATION] Approving workout video:', videoId);
+            handleVerifyWorkout(videoId, 'approve');
           },
         },
       ]
-    );
+    });
   };
 
   const confirmApproveWithPoints = () => {
     if (!selectedVideo) {
-      Alert.alert('Error', 'No video selected');
+      showAlert({
+        title: 'Error',
+        message: 'No video selected',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     setShowPointsModal(false);
@@ -225,7 +355,12 @@ export default function VideoModerationScreen({ navigation }) {
   const handleReject = (video) => {
     const targetVideo = video || selectedVideo;
     if (!targetVideo) {
-      Alert.alert('Error', 'No video selected');
+      showAlert({
+        title: 'Error',
+        message: 'No video selected',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     setSelectedVideo(targetVideo);
@@ -235,11 +370,21 @@ export default function VideoModerationScreen({ navigation }) {
 
   const confirmReject = () => {
     if (!selectedVideo) {
-      Alert.alert('Error', 'No video selected');
+      showAlert({
+        title: 'Error',
+        message: 'No video selected',
+        icon: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     if (!rejectionReason.trim()) {
-      Alert.alert('Required', 'Please provide a reason for rejection');
+      showAlert({
+        title: 'Required',
+        message: 'Please provide a reason for rejection',
+        icon: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
       return;
     }
     setShowRejectionModal(false);
@@ -251,10 +396,16 @@ export default function VideoModerationScreen({ navigation }) {
   };
 
   const VideoCard = ({ video, onPress }) => {
-    const userName = video.user?.name || 'Unknown';
-    const userHandle = video.user?.username ? `@${video.user.username}` : '';
-    const exerciseLabel = video.exercise || video.challenge?.title || 'Challenge Submission';
-    const points = video.reps * 1.5 + (video.weight || 0) * 0.1; // Rough calculation
+    const userName = String(video.user?.name || 'Unknown');
+    const userHandle = video.user?.username ? String(`@${video.user.username}`) : '';
+    const exerciseLabel = String(video.exercise || video.challenge?.title || 'Challenge Submission');
+    const reps = Number(video.reps) || 0;
+    const weight = Number(video.weight) || 0;
+    const points = reps * 1.5 + weight * 0.1;
+    const dateStr = video.createdAt || video.submittedAt;
+    const formattedDate = dateStr
+      ? `${new Date(dateStr).toLocaleDateString()} • ${new Date(dateStr).toLocaleTimeString()}`
+      : 'Unknown date';
 
     return (
       <TouchableOpacity
@@ -263,12 +414,10 @@ export default function VideoModerationScreen({ navigation }) {
         activeOpacity={0.7}
       >
         <View style={styles.videoThumbnail}>
-          <Ionicons name="play-circle" size={40} color="#fff" />
+          <Ionicons name="play-circle" size={40} color={C.white} />
           <View style={styles.videoOverlay}>
             <Text style={styles.videoExercise}>{exerciseLabel}</Text>
-            <Text style={styles.videoStats}>
-              {video.reps} reps × {video.weight || 0}kg
-            </Text>
+            <Text style={styles.videoStats}>{`${reps} reps × ${weight}kg`}</Text>
             <Text style={styles.videoUser}>{userName}</Text>
           </View>
         </View>
@@ -277,28 +426,28 @@ export default function VideoModerationScreen({ navigation }) {
           <View style={styles.videoHeader}>
             <View>
               <Text style={styles.videoUserName}>{userName}</Text>
-              <Text style={styles.videoUserHandle}>{userHandle}</Text>
+              {userHandle ? <Text style={styles.videoUserHandle}>{userHandle}</Text> : null}
             </View>
             <View style={styles.videoPointsBadge}>
-              <Text style={styles.videoPointsText}>~{Math.round(points)} XP</Text>
+              <Text style={styles.videoPointsText}>{`~${Math.round(points)} XP`}</Text>
             </View>
           </View>
 
           <View style={styles.videoDetails}>
             <View style={styles.videoDetailItem}>
-              <Ionicons name="barbell" size={14} color="#888" />
+              <Ionicons name="barbell" size={14} color={C.textSubtle} />
               <Text style={styles.videoDetailText}>{exerciseLabel}</Text>
             </View>
             <View style={styles.videoDetailItem}>
-              <Ionicons name="repeat" size={14} color="#888" />
-              <Text style={styles.videoDetailText}>{video.reps} reps</Text>
+              <Ionicons name="repeat" size={14} color={C.textSubtle} />
+              <Text style={styles.videoDetailText}>{`${reps} reps`}</Text>
             </View>
-            {video.weight > 0 && (
+            {weight > 0 ? (
               <View style={styles.videoDetailItem}>
-                <Ionicons name="fitness" size={14} color="#888" />
-                <Text style={styles.videoDetailText}>{video.weight}kg</Text>
+                <Ionicons name="fitness" size={14} color={C.textSubtle} />
+                <Text style={styles.videoDetailText}>{`${weight}kg`}</Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.videoActions}>
@@ -306,22 +455,20 @@ export default function VideoModerationScreen({ navigation }) {
               style={[styles.actionButton, styles.approveButton]}
               onPress={() => handleApprove(video)}
             >
-              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Ionicons name="checkmark" size={16} color={C.white} />
               <Text style={styles.actionButtonText}>Approve</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.rejectButton]}
               onPress={() => handleReject(video)}
             >
-              <Ionicons name="close" size={16} color="#fff" />
+              <Ionicons name="close" size={16} color={C.white} />
               <Text style={styles.actionButtonText}>Reject</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <Text style={styles.videoDate}>
-          {new Date(video.createdAt || video.submittedAt).toLocaleDateString()} • {new Date(video.createdAt || video.submittedAt).toLocaleTimeString()}
-        </Text>
+        <Text style={styles.videoDate}>{formattedDate}</Text>
       </TouchableOpacity>
     );
   };
@@ -331,7 +478,7 @@ export default function VideoModerationScreen({ navigation }) {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={C.white} />
         </TouchableOpacity>
         <Text style={styles.pageTitle}>Video Moderation</Text>
         <View style={styles.headerRight}>
@@ -341,31 +488,104 @@ export default function VideoModerationScreen({ navigation }) {
 
       {/* Search/Filter */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color={C.textSubtle} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Filter by exercise..."
-          placeholderTextColor="#666"
+          placeholderTextColor={C.textSubtle}
           value={filterExercise}
           onChangeText={setFilterExercise}
           autoCapitalize="none"
         />
         {filterExercise.length > 0 && (
           <TouchableOpacity onPress={() => setFilterExercise('')} style={styles.clearButton}>
-            <Ionicons name="close-circle" size={20} color="#888" />
+            <Ionicons name="close-circle" size={20} color={C.textSubtle} />
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Filter Chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroll}
+        contentContainerStyle={styles.filtersContent}
+      >
+        {/* Source Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterGroupLabel}>Type</Text>
+          {Object.values(SOURCE_FILTERS).map((filter) => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[styles.filterChip, sourceFilter === filter.value && styles.filterChipActive]}
+              onPress={() => setSourceFilter(filter.value)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={filter.icon}
+                size={14}
+                color={sourceFilter === filter.value ? C.white : C.textSubtle}
+              />
+              <Text style={[styles.filterChipText, sourceFilter === filter.value && styles.filterChipTextActive]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.filterDivider} />
+
+        {/* Date Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterGroupLabel}>Date</Text>
+          {Object.values(DATE_FILTERS).map((filter) => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[styles.filterChip, dateFilter === filter.value && styles.filterChipActive]}
+              onPress={() => setDateFilter(filter.value)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={filter.value === 'all' ? 'calendar' : filter.value === 'today' ? 'today' : 'time'}
+                size={14}
+                color={dateFilter === filter.value ? C.white : C.textSubtle}
+              />
+              <Text style={[styles.filterChipText, dateFilter === filter.value && styles.filterChipTextActive]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Reset Filters */}
+        {(sourceFilter !== 'all' || dateFilter !== 'all' || filterExercise.length > 0) && (
+          <>
+            <View style={styles.filterDivider} />
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={() => {
+                setSourceFilter('all');
+                setDateFilter('all');
+                setFilterExercise('');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={14} color={C.danger} />
+              <Text style={styles.resetButtonText}>Reset</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </ScrollView>
+
       {/* Videos List */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#ff003c" />
+          <ActivityIndicator size="large" color={C.accent} />
           <Text style={styles.loadingText}>Loading pending videos...</Text>
         </View>
       ) : videos.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="checkmark-circle-outline" size={64} color="#00d4aa" />
+          <Ionicons name="checkmark-circle-outline" size={64} color={C.success} />
           <Text style={styles.emptyText}>All caught up!</Text>
           <Text style={styles.emptySubtext}>No pending videos to review</Text>
         </View>
@@ -374,7 +594,7 @@ export default function VideoModerationScreen({ navigation }) {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ff003c" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />
           }
           showsVerticalScrollIndicator={false}
         >
@@ -397,21 +617,49 @@ export default function VideoModerationScreen({ navigation }) {
             style={styles.modalClose}
             onPress={() => {
               setSelectedVideo(null);
+              setShowOriginal(false);
               if (videoRef.current) {
                 videoRef.current.stopAsync();
               }
             }}
           >
-            <Ionicons name="close" size={32} color="#fff" />
+            <Ionicons name="close" size={32} color={C.white} />
           </TouchableOpacity>
 
           {selectedVideo && (
             <>
+              {/* Show Original Toggle - Only if video has originalUrl */}
+              {selectedVideo.originalVideoUrl && (
+                <TouchableOpacity
+                  style={[styles.toggleOriginalBtn, showOriginal && styles.toggleOriginalBtnActive]}
+                  onPress={() => {
+                    setShowOriginal(!showOriginal);
+                    // Stop and restart video when switching
+                    if (videoRef.current) {
+                      videoRef.current.stopAsync();
+                    }
+                  }}
+                >
+                  <Ionicons
+                    name={showOriginal ? "eye" : "eye-off"}
+                    size={18}
+                    color={showOriginal ? C.success : C.white}
+                  />
+                  <Text style={[styles.toggleOriginalText, showOriginal && { color: C.success }]}>
+                    {showOriginal ? "SHOWING ORIGINAL" : "SHOWING BLURRED"}
+                  </Text>
+                  <Text style={styles.toggleOriginalHint}>
+                    {showOriginal ? " (tap to blur)" : " (tap to unmask)"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* Video Player */}
               {selectedVideo.videoUrl ? (
                 <Video
+                  key={showOriginal ? 'original' : 'blurred'}
                   ref={videoRef}
-                  source={{ uri: selectedVideo.videoUrl }}
+                  source={{ uri: showOriginal && selectedVideo.originalVideoUrl ? selectedVideo.originalVideoUrl : selectedVideo.videoUrl }}
                   style={styles.videoPlayer}
                   useNativeControls
                   resizeMode="contain"
@@ -419,7 +667,7 @@ export default function VideoModerationScreen({ navigation }) {
                 />
               ) : (
                 <View style={styles.noVideoContainer}>
-                  <Ionicons name="videocam-off" size={64} color="#666" />
+                  <Ionicons name="videocam-off" size={64} color={C.textSubtle} />
                   <Text style={styles.noVideoText}>Video not available</Text>
                 </View>
               )}
@@ -435,50 +683,46 @@ export default function VideoModerationScreen({ navigation }) {
                   ) : (
                     <View style={styles.modalAvatarPlaceholder}>
                       <Text style={styles.modalAvatarInitial}>
-                        {(selectedVideo.user?.name?.[0] || '?').toUpperCase()}
+                        {String(selectedVideo.user?.name || '?')[0].toUpperCase()}
                       </Text>
                     </View>
                   )}
                   <View style={styles.modalUserDetails}>
-                    <Text style={styles.modalUserName}>{selectedVideo.user?.name || 'Unknown'}</Text>
-                    <Text style={styles.modalUserHandle}>
-                      @{selectedVideo.user?.username || 'unknown'}
-                    </Text>
+                    <Text style={styles.modalUserName}>{String(selectedVideo.user?.name || 'Unknown')}</Text>
+                    <Text style={styles.modalUserHandle}>{`@${selectedVideo.user?.username || 'unknown'}`}</Text>
                     <View style={styles.modalUserStats}>
-                      <Text style={styles.modalUserStat}>
-                        {selectedVideo.user?.totalPoints || 0} XP
-                      </Text>
+                      <Text style={styles.modalUserStat}>{`${Number(selectedVideo.user?.totalPoints || 0)} XP`}</Text>
                       <Text style={styles.modalUserStatSeparator}>•</Text>
-                      <Text style={styles.modalUserStat}>Rank {selectedVideo.user?.rank || 99}</Text>
+                      <Text style={styles.modalUserStat}>{`Rank ${Number(selectedVideo.user?.rank || 99)}`}</Text>
                       <Text style={styles.modalUserStatSeparator}>•</Text>
-                      <Text style={styles.modalUserStat}>{selectedVideo.user?.region || 'Global'}</Text>
+                      <Text style={styles.modalUserStat}>{String(selectedVideo.user?.region || 'Global')}</Text>
                     </View>
                   </View>
                 </View>
 
                 <View style={styles.modalWorkoutInfo}>
                   <Text style={styles.modalExercise}>
-                    {selectedVideo.exercise || selectedVideo.challenge?.title || 'Challenge Submission'}
+                    {String(selectedVideo.exercise || selectedVideo.challenge?.title || 'Challenge Submission')}
                   </Text>
                   <View style={styles.modalStats}>
                     <View style={styles.modalStat}>
-                      <Ionicons name="repeat" size={18} color="#888" />
-                      <Text style={styles.modalStatText}>{selectedVideo.reps} reps</Text>
+                      <Ionicons name="repeat" size={18} color={C.textSubtle} />
+                      <Text style={styles.modalStatText}>{`${Number(selectedVideo.reps || 0)} reps`}</Text>
                     </View>
-                    {selectedVideo.weight > 0 && (
+                    {Number(selectedVideo.weight || 0) > 0 ? (
                       <View style={styles.modalStat}>
-                        <Ionicons name="fitness" size={18} color="#888" />
-                        <Text style={styles.modalStatText}>{selectedVideo.weight}kg</Text>
+                        <Ionicons name="fitness" size={18} color={C.textSubtle} />
+                        <Text style={styles.modalStatText}>{`${Number(selectedVideo.weight || 0)}kg`}</Text>
                       </View>
-                    )}
-                    {selectedVideo.duration && (
+                    ) : null}
+                    {selectedVideo.duration ? (
                       <View style={styles.modalStat}>
-                        <Ionicons name="time" size={18} color="#888" />
+                        <Ionicons name="time" size={18} color={C.textSubtle} />
                         <Text style={styles.modalStatText}>
-                          {Math.floor(selectedVideo.duration / 60)}:{(selectedVideo.duration % 60).toString().padStart(2, '0')}
+                          {`${Math.floor(Number(selectedVideo.duration) / 60)}:${(Number(selectedVideo.duration) % 60).toString().padStart(2, '0')}`}
                         </Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 </View>
 
@@ -489,7 +733,7 @@ export default function VideoModerationScreen({ navigation }) {
                     onPress={() => handleApprove(selectedVideo)}
                     disabled={verifying}
                   >
-                    <Ionicons name="checkmark" size={24} color="#fff" />
+                    <Ionicons name="checkmark" size={24} color={C.white} />
                     <Text style={styles.modalActionText}>Approve</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -497,35 +741,33 @@ export default function VideoModerationScreen({ navigation }) {
                     onPress={() => handleReject(selectedVideo)}
                     disabled={verifying}
                   >
-                    <Ionicons name="close" size={24} color="#fff" />
+                    <Ionicons name="close" size={24} color={C.white} />
                     <Text style={styles.modalActionText}>Reject</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* User's Video History */}
-                {selectedVideo.userVideoHistory && selectedVideo.userVideoHistory.length > 0 && (
+                {(selectedVideo.userVideoHistory?.length || 0) > 0 ? (
                   <View style={styles.modalHistory}>
                     <Text style={styles.modalHistoryTitle}>User's Recent Videos</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {selectedVideo.userVideoHistory.map((historyVideo, index) => (
                         <View
-                          key={index}
+                          key={historyVideo.id || historyVideo._id || String(index)}
                           style={[
                             styles.historyItem,
-                            historyVideo.status === 'approved' && styles.historyItemApproved,
-                            historyVideo.status === 'rejected' && styles.historyItemRejected,
+                            historyVideo.status === 'approved' ? styles.historyItemApproved : null,
+                            historyVideo.status === 'rejected' ? styles.historyItemRejected : null,
                           ]}
                         >
-                          <Text style={styles.historyExercise}>{historyVideo.exercise}</Text>
-                          <Text style={styles.historyStats}>
-                            {historyVideo.reps} × {historyVideo.weight || 0}kg
-                          </Text>
-                          <Text style={styles.historyStatus}>{historyVideo.status}</Text>
+                          <Text style={styles.historyExercise}>{String(historyVideo.exercise || 'Unknown')}</Text>
+                          <Text style={styles.historyStats}>{`${Number(historyVideo.reps || 0)} × ${Number(historyVideo.weight || 0)}kg`}</Text>
+                          <Text style={styles.historyStatus}>{String(historyVideo.status || 'pending')}</Text>
                         </View>
                       ))}
                     </ScrollView>
                   </View>
-                )}
+                ) : null}
               </View>
             </>
           )}
@@ -544,7 +786,7 @@ export default function VideoModerationScreen({ navigation }) {
             <TextInput
               style={styles.rejectionInput}
               placeholder="Enter rejection reason..."
-              placeholderTextColor="#666"
+              placeholderTextColor={C.textSubtle}
               value={rejectionReason}
               onChangeText={setRejectionReason}
               multiline
@@ -582,7 +824,7 @@ export default function VideoModerationScreen({ navigation }) {
             <TextInput
               style={styles.rejectionInput}
               placeholder="Enter points..."
-              placeholderTextColor="#666"
+              placeholderTextColor={C.textSubtle}
               value={pointsOverride}
               onChangeText={setPointsOverride}
               keyboardType="number-pad"
@@ -606,34 +848,36 @@ export default function VideoModerationScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Alert */}
+      <CustomAlert {...alertConfig} onClose={hideAlert} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
+  container: ADMIN_SURFACES.page,
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: S.xl,
+    paddingBottom: S.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: C.card,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   pageTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    ...T.h2,
     flex: 1,
   },
   headerRight: {
@@ -641,71 +885,152 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   queueCount: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#ff003c',
+    color: C.accent,
+    letterSpacing: 1,
+  },
+  // Toggle Original Button
+  toggleOriginalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.card,
+    marginHorizontal: S.lg,
+    marginVertical: S.sm,
+    paddingVertical: S.sm,
+    paddingHorizontal: S.md,
+    borderRadius: R.sm,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  toggleOriginalBtnActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: C.success,
+  },
+  toggleOriginalText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.white,
+    letterSpacing: 0.5,
+    marginLeft: 6,
+  },
+  toggleOriginalHint: {
+    fontSize: 10,
+    color: C.textSubtle,
+    marginLeft: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    height: 48,
+    backgroundColor: C.panel,
+    marginHorizontal: S.xl,
+    marginVertical: S.md,
+    paddingHorizontal: S.md,
+    borderRadius: R.md,
+    height: 42,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  searchIcon: {
-    marginRight: 10,
-  },
+  searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#fff',
+    fontSize: 13,
+    color: C.text,
+    fontFamily: T.body.fontFamily,
   },
-  clearButton: {
-    padding: 4,
+  clearButton: { padding: 4 },
+  filtersScroll: {
+    marginBottom: S.sm,
+  },
+  filtersContent: {
+    paddingHorizontal: S.xl,
+    alignItems: 'center',
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: S.md,
+  },
+  filterGroupLabel: {
+    ...T.caption,
+    marginRight: S.sm,
+    color: C.textSubtle,
+  },
+  filterDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: C.borderSoft,
+    marginHorizontal: S.sm,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.sm,
+    paddingVertical: 6,
+    backgroundColor: C.card,
+    borderRadius: R.pill,
+    marginRight: S.xs,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 4,
+  },
+  filterChipActive: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textSubtle,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  filterChipTextActive: {
+    color: C.white,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: S.sm,
+    paddingVertical: 6,
+    backgroundColor: 'transparent',
+    borderRadius: R.pill,
+    borderWidth: 1,
+    borderColor: C.danger,
+    gap: 4,
+  },
+  resetButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.danger,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: S.xl,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#888',
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  emptySubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#888',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  bottomSpacer: {
-    height: 20,
-  },
+  loadingText: { marginTop: S.md, ...T.bodyMuted },
+  emptyText: { marginTop: S.md, ...T.h2 },
+  emptySubtext: { marginTop: S.sm, ...T.bodyMuted },
+  scroll: { flex: 1 },
+  scrollContent: { padding: S.xl, paddingBottom: S.xxl },
+  bottomSpacer: { height: 20 },
   videoCard: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 12,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...ADMIN_SHADOWS.soft,
   },
   videoThumbnail: {
     height: 180,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: C.surface,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -715,57 +1040,50 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     padding: 12,
   },
   videoExercise: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#fff',
+    color: C.white,
     marginBottom: 4,
   },
   videoStats: {
     fontSize: 12,
-    color: '#ccc',
+    color: C.textMuted,
     marginBottom: 2,
   },
   videoUser: {
     fontSize: 11,
-    color: '#888',
+    color: C.textSubtle,
   },
-  videoInfo: {
-    padding: 12,
-  },
+  videoInfo: { padding: 12 },
   videoHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: S.sm,
   },
-  videoUserName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  videoUserHandle: {
-    fontSize: 12,
-    color: '#888',
-  },
+  videoUserName: { fontSize: 13, fontWeight: '600', color: C.text },
+  videoUserHandle: { fontSize: 11, color: C.textSubtle },
   videoPointsBadge: {
-    backgroundColor: '#ff003c',
+    backgroundColor: C.accentSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.accent,
   },
   videoPointsText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#fff',
+    color: C.accent,
   },
   videoDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 12,
+    marginBottom: S.sm,
   },
   videoDetailItem: {
     flexDirection: 'row',
@@ -773,45 +1091,27 @@ const styles = StyleSheet.create({
     marginRight: 16,
     marginBottom: 4,
   },
-  videoDetailText: {
-    fontSize: 11,
-    color: '#888',
-    marginLeft: 4,
-  },
-  videoActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  videoDetailText: { fontSize: 11, color: C.textSubtle, marginLeft: 4 },
+  videoActions: { flexDirection: 'row', gap: 8 },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: R.md,
     gap: 6,
   },
-  approveButton: {
-    backgroundColor: '#00d4aa',
-  },
-  rejectButton: {
-    backgroundColor: '#ff3b30',
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-  },
+  approveButton: { backgroundColor: C.success },
+  rejectButton: { backgroundColor: C.danger },
+  actionButtonText: { fontSize: 12, fontWeight: '700', color: C.white },
   videoDate: {
     fontSize: 10,
-    color: '#666',
+    color: C.textSubtle,
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  modalContainer: { flex: 1, backgroundColor: C.bg },
   modalClose: {
     position: 'absolute',
     top: 50,
@@ -824,208 +1124,115 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  videoPlayer: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 0.75,
-    backgroundColor: '#000',
-  },
+  videoPlayer: { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.75, backgroundColor: C.black },
   noVideoContainer: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH * 0.75,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a0a',
+    backgroundColor: C.surface,
   },
-  noVideoText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#666',
-  },
+  noVideoText: { marginTop: 12, fontSize: 12, color: C.textSubtle },
   modalInfo: {
     flex: 1,
-    backgroundColor: '#050505',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+    backgroundColor: C.panel,
+    borderTopLeftRadius: R.xl,
+    borderTopRightRadius: R.xl,
+    padding: S.xl,
     marginTop: -20,
   },
-  modalUserInfo: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  modalAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginRight: 12,
-  },
+  modalUserInfo: { flexDirection: 'row', marginBottom: S.lg },
+  modalAvatar: { width: 52, height: 52, borderRadius: 26, marginRight: 12 },
   modalAvatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#ff003c',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  modalAvatarInitial: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  modalUserDetails: {
-    flex: 1,
-  },
-  modalUserName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
-  },
-  modalUserHandle: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 6,
-  },
-  modalUserStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalUserStat: {
-    fontSize: 11,
-    color: '#666',
-  },
-  modalUserStatSeparator: {
-    fontSize: 8,
-    color: '#444',
-    marginHorizontal: 6,
-  },
+  modalAvatarInitial: { fontSize: 20, fontWeight: '700', color: C.white },
+  modalUserDetails: { flex: 1 },
+  modalUserName: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 2 },
+  modalUserHandle: { fontSize: 11, color: C.textSubtle, marginBottom: 6 },
+  modalUserStats: { flexDirection: 'row', alignItems: 'center' },
+  modalUserStat: { fontSize: 10, color: C.textSubtle },
+  modalUserStatSeparator: { fontSize: 8, color: C.textSubtle, marginHorizontal: 6 },
   modalWorkoutInfo: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  modalExercise: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  modalStats: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  modalStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modalStatText: {
-    fontSize: 14,
-    color: '#888',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
+  modalExercise: { fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 10 },
+  modalStats: { flexDirection: 'row', gap: 16 },
+  modalStat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  modalStatText: { fontSize: 12, color: C.textSubtle },
+  modalActions: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   modalActionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: R.md,
     gap: 8,
   },
-  modalApproveButton: {
-    backgroundColor: '#00d4aa',
-  },
-  modalRejectButton: {
-    backgroundColor: '#ff3b30',
-  },
-  modalActionText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-  },
+  modalApproveButton: { backgroundColor: C.success },
+  modalRejectButton: { backgroundColor: C.danger },
+  modalActionText: { fontSize: 14, fontWeight: '700', color: C.white },
   modalHistory: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.md,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  modalHistoryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#888',
-    marginBottom: 12,
-  },
+  modalHistoryTitle: { ...T.caption, marginBottom: S.sm },
   historyItem: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    padding: S.sm,
     marginRight: 12,
     minWidth: 140,
-  },
-  historyItemApproved: {
     borderWidth: 1,
-    borderColor: '#00d4aa',
+    borderColor: C.border,
   },
-  historyItemRejected: {
-    borderWidth: 1,
-    borderColor: '#ff3b30',
-  },
-  historyExercise: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  historyStats: {
-    fontSize: 11,
-    color: '#888',
-    marginBottom: 4,
-  },
-  historyStatus: {
-    fontSize: 10,
-    color: '#666',
-    textTransform: 'uppercase',
-  },
+  historyItemApproved: { borderColor: C.success },
+  historyItemRejected: { borderColor: C.danger },
+  historyExercise: { fontSize: 12, fontWeight: '600', color: C.text, marginBottom: 4 },
+  historyStats: { fontSize: 11, color: C.textSubtle, marginBottom: 4 },
+  historyStatus: { fontSize: 10, color: C.textSubtle, textTransform: 'uppercase' },
   rejectionModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   rejectionModalContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: C.card,
+    borderRadius: R.lg,
+    padding: S.lg,
     width: '100%',
-    maxWidth: 400,
-  },
-  rejectionModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  rejectionModalSubtitle: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 16,
-  },
-  rejectionInput: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#fff',
+    maxWidth: 420,
     borderWidth: 1,
-    borderColor: '#333',
-    marginBottom: 16,
+    borderColor: C.border,
+  },
+  rejectionModalTitle: { ...T.h2, marginBottom: 8 },
+  rejectionModalSubtitle: { ...T.bodyMuted, marginBottom: S.md },
+  rejectionInput: {
+    backgroundColor: C.panel,
+    borderRadius: R.md,
+    padding: S.md,
+    fontSize: 13,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: S.md,
     minHeight: 100,
     textAlignVertical: 'top',
   },
@@ -1035,24 +1242,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rejectionModalButton: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: R.md,
   },
-  rejectionCancelButton: {
-    backgroundColor: '#222',
-  },
-  rejectionConfirmButton: {
-    backgroundColor: '#ff3b30',
-  },
-  rejectionCancelButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  rejectionConfirmButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  rejectionCancelButton: { backgroundColor: C.surface },
+  rejectionConfirmButton: { backgroundColor: C.danger },
+  rejectionCancelButtonText: { fontSize: 12, fontWeight: '600', color: C.text },
+  rejectionConfirmButtonText: { fontSize: 12, fontWeight: '600', color: C.white },
 });
