@@ -6,7 +6,6 @@ const prisma = require('../src/prisma');
 const { authenticate } = require('../middleware/auth');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { uploadVideo, deleteVideo } = require('../services/objectStorage');
-const { blurVideoFromUrl } = require('../services/faceBlurService');
 
 const router = express.Router();
 
@@ -606,59 +605,52 @@ router.post('/reports/:id/review', authenticate, asyncHandler(async (req, res) =
   });
 }));
 
-// POST /api/videos/blur - Blur faces in a video using LOCAL face detection (no cloud APIs)
+// POST /api/videos/blur - Blur faces in a video (proxies to faceblurapi service)
 router.post('/blur', authenticate, asyncHandler(async (req, res) => {
-  console.log('[BLUR] Blur request received');
-
   const { videoUrl } = req.body;
 
   if (!videoUrl) {
-    console.error('[BLUR] Missing videoUrl');
     throw new AppError('videoUrl is required', 400);
   }
 
-  console.log('[BLUR] Processing video:', videoUrl.substring(0, 50) + '...');
-
   try {
-    // Process video with face blur (uses local TensorFlow.js)
-    console.log('[BLUR] Calling face blur service (local)...');
-    const result = await blurVideoFromUrl(videoUrl);
+    // Call the faceblurapi service
+    const FACE_BLUR_API_URL = process.env.FACE_BLUR_API_URL || 'https://unyield-faceblur-api-production.up.railway.app';
 
-    console.log('[BLUR] Processing complete:', { facesFound: result.facesFound });
+    const response = await fetch(`${FACE_BLUR_API_URL}/blur`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl }),
+    });
 
-    // Upload the blurred video to Oracle Cloud Object Storage
-    console.log('[BLUR] Uploading blurred video to storage...');
-    const uploadResult = await uploadVideo(
-      result.buffer,
-      `blurred_${Date.now()}.mp4`,
-      'video/mp4'
-    );
+    const data = await response.json();
 
-    console.log('[BLUR] Blurred video uploaded:', uploadResult.publicUrl);
+    if (!response.ok || !data.success) {
+      throw new AppError(data.error || 'Face blur service failed', 502);
+    }
 
     res.json({
       success: true,
       data: {
-        blurredVideoUrl: uploadResult.publicUrl,
-        objectName: uploadResult.objectName,
-        facesFound: result.facesFound,
-        originalVideoUrl: videoUrl
-      },
-      message: `Blurred ${result.facesFound} faces in video`
+        blurredVideoUrl: data.data.blurredVideoUrl,
+        originalVideoUrl: data.data.originalVideoUrl,
+        facesFound: data.data.facesDetected || 0,
+        facesDetected: data.data.facesDetected || 0,
+        framesProcessed: data.data.framesProcessed || 0,
+      }
     });
 
   } catch (error) {
     console.error('[BLUR] Error:', error.message);
 
-    // If blur fails, return original URL as fallback
-    console.warn('[BLUR] Face blur failed, using original video');
+    // Fallback to original video if blur service is down
     return res.json({
       success: true,
       data: {
         blurredVideoUrl: videoUrl,
-        objectName: null,
+        originalVideoUrl: videoUrl,
         facesFound: 0,
-        originalVideoUrl: videoUrl
+        facesDetected: 0,
       },
       message: 'Face blur service unavailable - original video used'
     });
