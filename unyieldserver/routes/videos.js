@@ -122,7 +122,7 @@ router.post('/upload', authenticate, upload.single('video'), asyncHandler(async 
 // POST /api/videos - Submit a video for verification
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   console.log('[SUBMIT ROUTE] Video submission request received');
-  const { exercise, reps, weight, duration, videoUrl, thumbnailUrl } = req.body;
+  const { exercise, reps, weight, duration, videoUrl, originalVideoUrl, thumbnailUrl } = req.body;
 
   if (!exercise || !reps) {
     console.error('[SUBMIT ROUTE] Missing exercise or reps');
@@ -148,6 +148,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
       weight: weight || 0,
       duration,
       videoUrl,
+      originalVideoUrl, // Store original unblurred video for admin view
       thumbnailUrl,
       status: isAdmin ? 'approved' : 'pending',
       ...(isAdmin && {
